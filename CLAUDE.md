@@ -208,3 +208,10 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- Python 3.13+ + Standard library only (no external packages for Phase I) (001-in-memory-cli)
+- In-memory data structures (list/dict), no persistence (001-in-memory-cli)
+
+## Recent Changes
+- 001-in-memory-cli: Added Python 3.13+ + Standard library only (no external packages for Phase I)
