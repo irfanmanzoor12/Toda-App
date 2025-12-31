@@ -22,12 +22,6 @@ def create_task(
     """Create a new task for the authenticated user."""
     session, jwt_user_id = deps
 
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
-
     todo.user_id = jwt_user_id
     session.add(todo)
     session.commit()
@@ -43,12 +37,6 @@ def list_tasks(
     """List all tasks for the authenticated user."""
     session, jwt_user_id = deps
 
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
-
     statement = select(Todo).where(Todo.user_id == jwt_user_id)
     tasks = session.exec(statement).all()
     return tasks
@@ -62,12 +50,6 @@ def get_task(
 ):
     """Get a specific task by ID. Returns 404 if not found or not owned by user."""
     session, jwt_user_id = deps
-
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
 
     statement = select(Todo).where(Todo.id == task_id, Todo.user_id == jwt_user_id)
     task = session.exec(statement).first()
@@ -90,12 +72,6 @@ def update_task(
 ):
     """Update a task. Returns 404 if not found or not owned by user."""
     session, jwt_user_id = deps
-
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
 
     statement = select(Todo).where(Todo.id == task_id, Todo.user_id == jwt_user_id)
     task = session.exec(statement).first()
@@ -125,12 +101,6 @@ def complete_task(
     """Mark a task as complete. Returns 404 if not found or not owned by user."""
     session, jwt_user_id = deps
 
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
-
     statement = select(Todo).where(Todo.id == task_id, Todo.user_id == jwt_user_id)
     task = session.exec(statement).first()
 
@@ -156,12 +126,6 @@ def delete_task(
 ):
     """Delete a task. Returns 404 if not found or not owned by user."""
     session, jwt_user_id = deps
-
-    if user_id != jwt_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User ID mismatch"
-        )
 
     statement = select(Todo).where(Todo.id == task_id, Todo.user_id == jwt_user_id)
     task = session.exec(statement).first()

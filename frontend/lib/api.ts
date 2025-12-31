@@ -1,11 +1,13 @@
-"""Frontend API client with JWT Authorization header.
-
-Task: T210 - Create API client that sends Authorization header with Better Auth JWT.
-"""
+/**
+ * Frontend API client with JWT Authorization header.
+ *
+ * Task: T210 - Create API client that sends Authorization header with Better Auth JWT.
+ */
 
 import { authClient } from "./auth-client";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = "/backend";
+
 
 interface ApiCallOptions extends RequestInit {
   requireAuth?: boolean;
