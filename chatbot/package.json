@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:mcp": "tsx --watch mcp-server/index.ts",
-    "dev:agent": "echo 'Agent development script placeholder'",
+    "dev:agent": "tsx --watch agent/api/server.ts",
     "dev:chatkit": "echo 'ChatKit development script placeholder'",
     "build": "tsc",
     "test": "vitest",
@@ -14,7 +14,7 @@
     "test:security": "vitest run tests/security",
     "test:performance": "vitest run tests/performance",
     "start:mcp": "node --loader ts-node/esm mcp-server/index.ts",
-    "start:agent": "echo 'Start agent API placeholder'",
+    "start:agent": "node dist/agent/api/server.js",
     "start:chatkit": "echo 'Start ChatKit UI placeholder'"
   },
   "keywords": [
@@ -33,9 +33,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
     "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
     "openai": "^6.15.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^25.0.3",
     "@vitest/ui": "^4.0.16",
     "ts-node": "^10.9.2",
