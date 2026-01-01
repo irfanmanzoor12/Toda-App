@@ -6,7 +6,7 @@
   "scripts": {
     "dev:mcp": "tsx --watch mcp-server/index.ts",
     "dev:agent": "tsx --watch agent/api/server.ts",
-    "dev:chatkit": "echo 'ChatKit development script placeholder'",
+    "dev:chatkit": "cd chatkit && npm run dev",
     "build": "tsc",
     "test": "vitest",
     "test:unit": "vitest run tests/skills",
@@ -15,7 +15,7 @@
     "test:performance": "vitest run tests/performance",
     "start:mcp": "node --loader ts-node/esm mcp-server/index.ts",
     "start:agent": "node dist/agent/api/server.js",
-    "start:chatkit": "echo 'Start ChatKit UI placeholder'"
+    "start:chatkit": "cd chatkit && npm run preview"
   },
   "keywords": [
     "chatbot",

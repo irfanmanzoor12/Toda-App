@@ -118,9 +118,10 @@ export async function executeAddTask(
       description: input.description || null,
     };
 
-    // POST to /api/todos
+    // POST to /api/{user_id}/tasks (Phase II actual endpoint)
+    // Note: user_id derived from session token by backend
     const response = await httpClient.post<AddTaskOutput>(
-      "/api/todos",
+      `/api/${sessionToken}/tasks`,
       requestBody
     );
 

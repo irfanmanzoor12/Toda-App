@@ -1,0 +1,18 @@
+/**
+ * App Component
+ *
+ * Root component for Todo Chatbot ChatKit
+ */
+
+import { Chat } from './components/Chat';
+import './App.css';
+
+function App() {
+  return (
+    <div className="app">
+      <Chat />
+    </div>
+  );
+}
+
+export default App;

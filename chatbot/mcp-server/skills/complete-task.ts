@@ -97,10 +97,10 @@ export async function executeCompleteTask(
   const httpClient = createAuthenticatedClient(sessionToken);
 
   try {
-    // PUT to /api/todos/{task_id} with is_completed: true
-    const response = await httpClient.put<CompleteTaskOutput>(
-      `/api/todos/${input.task_id}`,
-      { is_completed: true }
+    // PATCH to /api/{user_id}/tasks/{task_id}/complete (Phase II actual endpoint)
+    const response = await httpClient.patch<CompleteTaskOutput>(
+      `/api/${sessionToken}/tasks/${input.task_id}/complete`,
+      {}
     );
 
     // Return completed task object

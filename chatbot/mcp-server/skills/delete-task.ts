@@ -90,8 +90,8 @@ export async function executeDeleteTask(
   const httpClient = createAuthenticatedClient(sessionToken);
 
   try {
-    // DELETE to /api/todos/{task_id}
-    await httpClient.delete(`/api/todos/${input.task_id}`);
+    // DELETE to /api/{user_id}/tasks/{task_id} (Phase II actual endpoint)
+    await httpClient.delete(`/api/${sessionToken}/tasks/${input.task_id}`);
 
     // Return success message
     return {

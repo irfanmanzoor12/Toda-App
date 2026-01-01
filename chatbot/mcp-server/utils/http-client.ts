@@ -117,6 +117,17 @@ export class AuthenticatedHttpClient {
   }
 
   /**
+   * PATCH request
+   */
+  async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    return this.client.patch<T>(url, data, config);
+  }
+
+  /**
    * DELETE request
    */
   async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {

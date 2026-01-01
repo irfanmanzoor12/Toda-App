@@ -53,8 +53,8 @@ export async function executeListTasks(
   const httpClient = createAuthenticatedClient(sessionToken);
 
   try {
-    // GET from /api/todos
-    const response = await httpClient.get<Task[]>("/api/todos");
+    // GET from /api/{user_id}/tasks (Phase II actual endpoint)
+    const response = await httpClient.get<Task[]>(`/api/${sessionToken}/tasks`);
 
     // Return tasks array
     // Note: Empty array is a valid success response
