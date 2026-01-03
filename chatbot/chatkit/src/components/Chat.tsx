@@ -5,7 +5,7 @@
  * Implements stateless conversation per spec Section 6.1
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { sendMessage, ChatAPIError } from '../utils/api-client';
 import { CHAT_CONFIG } from '../config';
 import './Chat.css';
@@ -21,22 +21,38 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string>('demo-token');
 
-  // Extract session token from Better Auth cookies
-  const getSessionToken = (): string => {
-    // Better Auth stores session in cookie named 'better-auth.session_token'
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'better-auth.session_token' || name.includes('session')) {
-        return value;
+  // Fetch session from Better Auth API
+  const fetchSession = async () => {
+    try {
+      const response = await fetch('/api/auth/get-session', {
+        credentials: 'include', // Include cookies
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Extract session token from Better Auth
+        // The backend uses the session token as the user_id (opaque token)
+        if (data?.session?.token) {
+          console.log('✓ Using Better Auth session token');
+          setSessionToken(data.session.token);
+        } else {
+          console.warn('⚠ No session found, using demo-token');
+        }
+      } else {
+        console.warn('⚠ Not authenticated, using demo-token');
       }
+    } catch (error) {
+      console.error('Failed to fetch session:', error);
+      console.warn('Falling back to demo-token');
     }
-    // Fallback to demo token if not found
-    return 'demo-token';
   };
 
-  const [sessionToken] = useState(getSessionToken());
+  // Fetch session on component mount
+  useEffect(() => {
+    fetchSession();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
