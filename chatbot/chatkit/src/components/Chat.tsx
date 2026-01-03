@@ -21,7 +21,22 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionToken] = useState('demo-token'); // T321 will implement real token extraction
+
+  // Extract session token from Better Auth cookies
+  const getSessionToken = (): string => {
+    // Better Auth stores session in cookie named 'better-auth.session_token'
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'better-auth.session_token' || name.includes('session')) {
+        return value;
+      }
+    }
+    // Fallback to demo token if not found
+    return 'demo-token';
+  };
+
+  const [sessionToken] = useState(getSessionToken());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
