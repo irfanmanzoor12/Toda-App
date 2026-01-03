@@ -1,7 +1,8 @@
-"""Better Auth client configuration.
-
-Task: T209 - Better Auth client exports.
-"""
+/**
+ * Better Auth API routes.
+ *
+ * Task: T209 - Better Auth API route handler.
+ */
 
 import { createAuthClient } from "better-auth/react";
 
