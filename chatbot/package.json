@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:mcp": "tsx --watch mcp-server/index.ts",
+    "dev:mcp-http": "tsx --watch mcp-server/http-server.ts",
     "dev:agent": "tsx --watch agent/api/server.ts",
     "dev:chatkit": "cd chatkit && npm run dev",
     "build": "tsc",
@@ -14,6 +15,7 @@
     "test:security": "vitest run tests/security",
     "test:performance": "vitest run tests/performance",
     "start:mcp": "node --loader ts-node/esm mcp-server/index.ts",
+    "start:mcp-http": "node --loader ts-node/esm mcp-server/http-server.ts",
     "start:agent": "node dist/agent/api/server.js",
     "start:chatkit": "cd chatkit && npm run preview"
   },
@@ -34,6 +36,7 @@
     "@modelcontextprotocol/sdk": "^1.25.1",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "openai": "^6.15.0"
   },

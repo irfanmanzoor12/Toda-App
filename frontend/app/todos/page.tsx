@@ -46,13 +46,13 @@ export default function TodosPage() {
     }
   }, [session]);
 
-  // Auto-refresh polling (every 5 seconds)
+  // Auto-refresh polling (every 15 seconds)
   useEffect(() => {
     if (!session?.user?.id) return;
 
     const interval = setInterval(() => {
       fetchTodos();
-    }, 5000); // Poll every 5 seconds
+    }, 15000); // Poll every 15 seconds
 
     return () => clearInterval(interval);
   }, [session]);

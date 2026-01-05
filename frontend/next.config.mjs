@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       {
         source: "/backend/:path*",
-        destination: "http://127.0.0.1:8000/:path*",
+        destination: "http://127.0.0.1:8001/:path*",
       },
       // Proxy all @vite resources (Vite HMR and modules) - @ needs to be escaped
       {
