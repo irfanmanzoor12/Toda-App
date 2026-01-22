@@ -1,0 +1,1427 @@
+# Phase V Task Breakdown - TodoApp
+
+version: "1.0"
+phase: "Phase V - Advanced Cloud Deployment"
+created: "2026-01-06"
+status: "active"
+
+---
+
+## Task Organization
+
+**Total Tasks:** 75
+**Estimated Duration:** 6 weeks
+**Priority Distribution:**
+- High: 35 tasks
+- Medium: 30 tasks
+- Low: 10 tasks
+
+---
+
+## Milestone 1: Database Schema & Core Backend (Week 1-2)
+
+### Database Migrations
+
+tasks:
+  - task_id: TASK-001
+    title: "Create migration: Add priority column to todo table"
+    spec_ref: REQ-003
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Alembic migration file created in backend/alembic/versions/"
+      - "Column added: priority VARCHAR(20) DEFAULT 'medium'"
+      - "Check constraint: priority IN ('low', 'medium', 'high', 'critical')"
+      - "Migration runs successfully on test database"
+      - "Rollback (downgrade) works correctly"
+    files_to_modify:
+      - "backend/alembic/versions/001_add_priority.py"
+      - "backend/src/models/task.py"
+
+  - task_id: TASK-002
+    title: "Create migration: Add due_date and reminder_schedule to todo"
+    spec_ref: REQ-002
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Alembic migration file created"
+      - "Column added: due_date TIMESTAMP WITH TIME ZONE"
+      - "Column added: reminder_schedule JSONB"
+      - "Index created on due_date"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/002_add_due_date.py"
+      - "backend/src/models/task.py"
+
+  - task_id: TASK-003
+    title: "Create migration: Add soft delete (deleted_at)"
+    spec_ref: REQ-006
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Column added: deleted_at TIMESTAMP WITH TIME ZONE"
+      - "Partial index: WHERE deleted_at IS NULL"
+      - "All SELECT queries updated to filter deleted_at IS NULL"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/003_add_soft_delete.py"
+      - "backend/src/models/task.py"
+
+  - task_id: TASK-004
+    title: "Create migration: Add full-text search with tsvector"
+    spec_ref: REQ-005
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: []
+    acceptance:
+      - "Column added: search_vector tsvector"
+      - "GIN index created: idx_todo_search"
+      - "Trigger function created: todo_search_trigger()"
+      - "Trigger auto-updates search_vector on INSERT/UPDATE"
+      - "Test query: SELECT * FROM todo WHERE search_vector @@ to_tsquery('buy')"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/004_add_fulltext_search.py"
+
+  - task_id: TASK-005
+    title: "Create migration: Create tags table"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Table created: tags (id, name, user_id, created_at)"
+      - "UNIQUE constraint on (name, user_id)"
+      - "Index on user_id"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/005_create_tags_table.py"
+      - "backend/src/models/tag.py"
+
+  - task_id: TASK-006
+    title: "Create migration: Create task_tags junction table"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-005]
+    acceptance:
+      - "Table created: task_tags (task_id, tag_id, created_at)"
+      - "Foreign keys to todo and tags tables with ON DELETE CASCADE"
+      - "Composite primary key (task_id, tag_id)"
+      - "Indexes on both task_id and tag_id"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/006_create_task_tags_table.py"
+      - "backend/src/models/task_tag.py"
+
+  - task_id: TASK-007
+    title: "Create migration: Create recurrence_pattern table"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: []
+    acceptance:
+      - "Table created with all columns per plan"
+      - "UNIQUE constraint on task_id"
+      - "Check constraints on frequency, interval, day_of_week, day_of_month"
+      - "Index on next_occurrence WHERE deleted_at IS NULL"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/007_create_recurrence_pattern_table.py"
+      - "backend/recurrence-service/src/models/recurrence_pattern.py"
+
+  - task_id: TASK-008
+    title: "Create migration: Create reminders table"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Table created: reminders (id, task_id, user_id, trigger_at, sent_at, created_at, cancelled_at)"
+      - "Foreign key to todo table with ON DELETE CASCADE"
+      - "Index on trigger_at WHERE sent_at IS NULL AND cancelled_at IS NULL"
+      - "Migration runs successfully"
+    files_to_modify:
+      - "backend/alembic/versions/008_create_reminders_table.py"
+      - "backend/reminder-service/src/models/reminder.py"
+
+  - task_id: TASK-009
+    title: "Run all migrations on development database"
+    spec_ref: REQ-006
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-001, TASK-002, TASK-003, TASK-004, TASK-005, TASK-006, TASK-007, TASK-008]
+    acceptance:
+      - "All 8 migrations run successfully with alembic upgrade head"
+      - "Database schema matches expected state"
+      - "No migration errors in logs"
+      - "Test data inserted successfully into all new tables"
+    commands:
+      - "cd backend && alembic upgrade head"
+      - "psql $DATABASE_URL -c '\\dt' # Verify all tables exist"
+
+---
+
+### Task Service Enhancements
+
+  - task_id: TASK-010
+    title: "Update Task model with new fields (priority, due_date, tags)"
+    spec_ref: REQ-002, REQ-003, REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-009]
+    acceptance:
+      - "Task model includes: priority, due_date, reminder_schedule, deleted_at, search_vector"
+      - "SQLAlchemy relationships: tags (many-to-many via task_tags)"
+      - "Pydantic schemas updated: TaskCreate, TaskUpdate, TaskResponse"
+      - "Default values set correctly (priority='medium')"
+      - "Unit tests pass for model creation"
+    files_to_modify:
+      - "backend/src/models/task.py"
+      - "backend/src/schemas/task.py"
+
+  - task_id: TASK-011
+    title: "Create Tag and TaskTag models"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-009]
+    acceptance:
+      - "Tag model created with name, user_id, created_at"
+      - "TaskTag model created for junction table"
+      - "SQLAlchemy relationships defined"
+      - "Pydantic schemas: TagCreate, TagResponse"
+      - "Unit tests pass"
+    files_to_create:
+      - "backend/src/models/tag.py"
+      - "backend/src/models/task_tag.py"
+      - "backend/src/schemas/tag.py"
+
+  - task_id: TASK-012
+    title: "Implement EventPublisher class for Kafka via Dapr"
+    spec_ref: REQ-006
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: []
+    acceptance:
+      - "EventPublisher class created in backend/src/events/publisher.py"
+      - "publish_event() method calls Dapr Pub/Sub HTTP API"
+      - "Methods: publish_task_created, publish_task_updated, publish_task_completed, publish_task_deleted"
+      - "Error handling with retry logic (3 retries, exponential backoff)"
+      - "Unit tests with mocked Dapr HTTP endpoint"
+    files_to_create:
+      - "backend/src/events/publisher.py"
+      - "backend/src/events/schemas.py"
+      - "backend/tests/test_event_publisher.py"
+
+  - task_id: TASK-013
+    title: "Update POST /api/todos to support priority, tags, due_date"
+    spec_ref: REQ-002, REQ-003, REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-010, TASK-011, TASK-012]
+    acceptance:
+      - "Request body accepts: title, description, priority, tags[], due_date, reminder_schedule"
+      - "Creates task in database with new fields"
+      - "Creates tags if they don't exist (upsert logic)"
+      - "Creates task_tags associations"
+      - "Publishes task.created event to Kafka"
+      - "Returns TaskResponse with all fields including tags"
+      - "Unit tests and integration tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+      - "backend/tests/api/test_tasks.py"
+
+  - task_id: TASK-014
+    title: "Update PUT /api/todos/{id} to support priority, tags, due_date"
+    spec_ref: REQ-002, REQ-003, REQ-004
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-010, TASK-012]
+    acceptance:
+      - "Request body accepts partial updates for all fields"
+      - "Calculates diff (old vs new values)"
+      - "Updates database"
+      - "Publishes task.updated event with diff"
+      - "Returns updated TaskResponse"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+
+  - task_id: TASK-015
+    title: "Update DELETE /api/todos/{id} to use soft delete"
+    spec_ref: REQ-006
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-003, TASK-012]
+    acceptance:
+      - "Sets deleted_at = NOW() instead of hard delete"
+      - "Publishes task.deleted event"
+      - "Returns 204 No Content"
+      - "Task no longer appears in GET /api/todos"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+
+  - task_id: TASK-016
+    title: "Update GET /api/todos to support filters (priority, tags, due_date)"
+    spec_ref: REQ-003, REQ-004, REQ-005
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-010]
+    acceptance:
+      - "Query params: status, priority, tags[], due_before, due_after, limit, offset"
+      - "Filters deleted_at IS NULL"
+      - "Joins with task_tags and tags for tag filtering"
+      - "Returns TaskResponse[] with tags included"
+      - "Performance: query time < 50ms with 10,000 tasks"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+
+  - task_id: TASK-017
+    title: "Implement GET /api/todos/search with full-text search"
+    spec_ref: REQ-005
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-004, TASK-016]
+    acceptance:
+      - "Query param: q (search text, required)"
+      - "Uses PostgreSQL full-text search: WHERE search_vector @@ to_tsquery(?)"
+      - "Supports all filters from GET /api/todos"
+      - "Returns results sorted by relevance (ts_rank)"
+      - "Performance: < 100ms with 10,000 tasks"
+      - "Unit tests with various search queries"
+    files_to_create:
+      - "backend/src/api/routes/search.py"
+      - "backend/tests/api/test_search.py"
+
+  - task_id: TASK-018
+    title: "Implement POST /api/todos/{id}/tags for adding tags"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-011, TASK-012]
+    acceptance:
+      - "Request body: { tags: string[] }"
+      - "Creates new tags if they don't exist (user-scoped)"
+      - "Creates task_tags associations"
+      - "Publishes task.tagged event"
+      - "Returns updated TaskResponse with all tags"
+      - "Unit tests pass"
+    files_to_create:
+      - "backend/src/api/routes/tags.py"
+      - "backend/tests/api/test_tags.py"
+
+  - task_id: TASK-019
+    title: "Implement DELETE /api/todos/{id}/tags/{tag_name} for removing tags"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-018]
+    acceptance:
+      - "Removes task_tags association"
+      - "Does not delete tag from tags table (other tasks may use it)"
+      - "Publishes task.untagged event"
+      - "Returns updated TaskResponse"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tags.py"
+
+  - task_id: TASK-020
+    title: "Implement GET /api/tags for listing user's tags"
+    spec_ref: REQ-004
+    plan_ref: COMP-001
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-011]
+    acceptance:
+      - "Query params: sort_by (usage | name), limit"
+      - "Returns tags with usage count (JOIN COUNT on task_tags)"
+      - "Sorted by usage (most used first) or alphabetically"
+      - "User-scoped results"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tags.py"
+
+  - task_id: TASK-021
+    title: "Implement PUT /api/todos/{id}/priority"
+    spec_ref: REQ-003
+    plan_ref: COMP-001
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-010, TASK-012]
+    acceptance:
+      - "Request body: { priority: 'low' | 'medium' | 'high' | 'critical' }"
+      - "Updates task priority"
+      - "Publishes task.priority_changed event"
+      - "Returns updated TaskResponse"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+
+  - task_id: TASK-022
+    title: "Implement PUT /api/todos/{id}/due-date"
+    spec_ref: REQ-002
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-010, TASK-012]
+    acceptance:
+      - "Request body: { due_date: ISO8601, reminder_schedule: string[] }"
+      - "Updates task due_date and reminder_schedule"
+      - "Calls Reminder Service to schedule reminders (via Dapr service invocation)"
+      - "Publishes task.due_date_set event"
+      - "Returns updated TaskResponse"
+      - "Unit tests with mocked Reminder Service"
+    files_to_modify:
+      - "backend/src/api/routes/tasks.py"
+
+---
+
+## Milestone 2: New Services - Recurrence & Reminder (Week 2-3)
+
+### Recurrence Service
+
+  - task_id: TASK-023
+    title: "Create Recurrence Service project structure"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Directory created: backend/recurrence-service/"
+      - "Files: main.py, requirements.txt, Dockerfile, .dockerignore"
+      - "FastAPI app skeleton with health endpoint"
+      - "Can run locally: uvicorn main:app --port 8002"
+    files_to_create:
+      - "backend/recurrence-service/src/main.py"
+      - "backend/recurrence-service/requirements.txt"
+      - "backend/recurrence-service/Dockerfile"
+
+  - task_id: TASK-024
+    title: "Create RecurrencePattern model in Recurrence Service"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-007, TASK-023]
+    acceptance:
+      - "SQLAlchemy model matches database schema"
+      - "Pydantic schemas: RecurrencePatternCreate, RecurrencePatternResponse"
+      - "Unit tests pass"
+    files_to_create:
+      - "backend/recurrence-service/src/models/recurrence_pattern.py"
+      - "backend/recurrence-service/src/schemas/recurrence.py"
+
+  - task_id: TASK-025
+    title: "Implement POST /api/recurrence/patterns"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-024]
+    acceptance:
+      - "Request body per plan specification"
+      - "Creates recurrence_pattern in database"
+      - "Calculates initial next_occurrence based on frequency"
+      - "Returns RecurrencePatternResponse"
+      - "User authentication via JWT"
+      - "Unit tests pass"
+    files_to_create:
+      - "backend/recurrence-service/src/api/routes/recurrence.py"
+      - "backend/recurrence-service/tests/api/test_recurrence.py"
+
+  - task_id: TASK-026
+    title: "Implement RecurrenceProcessor class"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: large
+    dependencies: [TASK-024]
+    acceptance:
+      - "process_due_recurrences() method finds patterns WHERE next_occurrence <= NOW()"
+      - "_should_spawn() checks end_date and max_occurrences"
+      - "_spawn_task_instance() creates new task via Task Service (Dapr service invocation)"
+      - "_calculate_next_occurrence() handles daily, weekly, monthly frequencies"
+      - "Updates recurrence_pattern: occurrences_count++, last_spawned_at, next_occurrence"
+      - "Publishes task.spawned event to Kafka"
+      - "Unit tests with mocked dependencies"
+    files_to_create:
+      - "backend/recurrence-service/src/processor.py"
+      - "backend/recurrence-service/tests/test_processor.py"
+
+  - task_id: TASK-027
+    title: "Implement POST /api/recurrence/process (Dapr Cron endpoint)"
+    spec_ref: REQ-001, REQ-007
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-026]
+    acceptance:
+      - "Endpoint accepts POST from Dapr Cron binding"
+      - "Calls processor.process_due_recurrences()"
+      - "Returns { spawned_count: N }"
+      - "Logs each spawned task"
+      - "Integration test with test database"
+    files_to_modify:
+      - "backend/recurrence-service/src/api/routes/recurrence.py"
+
+  - task_id: TASK-028
+    title: "Implement GET /api/recurrence/patterns/{id}"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-024]
+    acceptance:
+      - "Returns RecurrencePatternResponse with spawned tasks count"
+      - "User can only access their own patterns"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/recurrence-service/src/api/routes/recurrence.py"
+
+  - task_id: TASK-029
+    title: "Implement PUT /api/recurrence/patterns/{id}"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: medium
+    status: pending
+    complexity: medium
+    dependencies: [TASK-024]
+    acceptance:
+      - "Allows updating: frequency, interval, end_date"
+      - "Recalculates next_occurrence if frequency changes"
+      - "Note: applies to future instances only"
+      - "Returns updated RecurrencePatternResponse"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/recurrence-service/src/api/routes/recurrence.py"
+
+  - task_id: TASK-030
+    title: "Implement DELETE /api/recurrence/patterns/{id}"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-024]
+    acceptance:
+      - "Query param: delete_future (boolean, default: true)"
+      - "Sets deleted_at on recurrence_pattern (soft delete)"
+      - "Optionally soft-deletes future task instances"
+      - "Returns 204 No Content"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/recurrence-service/src/api/routes/recurrence.py"
+
+  - task_id: TASK-031
+    title: "Create Dockerfile for Recurrence Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-023]
+    acceptance:
+      - "Multi-stage build with Python 3.11-slim"
+      - "Installs dependencies from requirements.txt"
+      - "Exposes port 8002"
+      - "CMD runs uvicorn"
+      - "Image builds successfully: docker build -t recurrence-service ."
+      - "Container runs: docker run -p 8002:8002 recurrence-service"
+    files_to_modify:
+      - "backend/recurrence-service/Dockerfile"
+
+---
+
+### Reminder Service
+
+  - task_id: TASK-032
+    title: "Create Reminder Service project structure"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Directory created: backend/reminder-service/"
+      - "FastAPI app skeleton with health endpoint"
+      - "Can run locally: uvicorn main:app --port 8003"
+    files_to_create:
+      - "backend/reminder-service/src/main.py"
+      - "backend/reminder-service/requirements.txt"
+      - "backend/reminder-service/Dockerfile"
+
+  - task_id: TASK-033
+    title: "Create Reminder model in Reminder Service"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-008, TASK-032]
+    acceptance:
+      - "SQLAlchemy model matches database schema"
+      - "Pydantic schemas: ReminderCreate, ReminderResponse"
+      - "Unit tests pass"
+    files_to_create:
+      - "backend/reminder-service/src/models/reminder.py"
+      - "backend/reminder-service/src/schemas/reminder.py"
+
+  - task_id: TASK-034
+    title: "Implement POST /api/reminders/schedule"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-033]
+    acceptance:
+      - "Request body: { task_id, due_date, reminder_times: ['1h', '1d'] }"
+      - "Parses reminder_times (1h = 1 hour before, 1d = 1 day before)"
+      - "Creates multiple reminder records with trigger_at calculated"
+      - "Returns array of ReminderResponse"
+      - "Unit tests with various reminder schedules"
+    files_to_create:
+      - "backend/reminder-service/src/api/routes/reminders.py"
+      - "backend/reminder-service/tests/api/test_reminders.py"
+
+  - task_id: TASK-035
+    title: "Implement ReminderProcessor class"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-033]
+    acceptance:
+      - "process_due_reminders() finds reminders WHERE trigger_at <= NOW()"
+      - "_send_reminder() publishes reminder.triggered event to Kafka"
+      - "Updates reminder: sent_at = NOW()"
+      - "Includes task details in event payload"
+      - "Unit tests with mocked Kafka publisher"
+    files_to_create:
+      - "backend/reminder-service/src/processor.py"
+      - "backend/reminder-service/tests/test_processor.py"
+
+  - task_id: TASK-036
+    title: "Implement POST /api/reminders/process (Dapr Cron endpoint)"
+    spec_ref: REQ-002, REQ-007
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-035]
+    acceptance:
+      - "Endpoint accepts POST from Dapr Cron binding"
+      - "Calls processor.process_due_reminders()"
+      - "Returns { sent_count: N }"
+      - "Integration test"
+    files_to_create:
+      - "backend/reminder-service/src/api/routes/reminders.py"
+
+  - task_id: TASK-037
+    title: "Implement DELETE /api/reminders/{task_id}"
+    spec_ref: REQ-002
+    plan_ref: COMP-003
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-033]
+    acceptance:
+      - "Sets cancelled_at on all reminders for task_id"
+      - "Returns 204 No Content"
+      - "Unit tests pass"
+    files_to_modify:
+      - "backend/reminder-service/src/api/routes/reminders.py"
+
+  - task_id: TASK-038
+    title: "Create Dockerfile for Reminder Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-003
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-032]
+    acceptance:
+      - "Multi-stage build"
+      - "Exposes port 8003"
+      - "Image builds and runs successfully"
+    files_to_create:
+      - "backend/reminder-service/Dockerfile"
+
+---
+
+## Milestone 3: MCP Tools & Frontend (Week 3-4)
+
+### MCP Server Enhancements
+
+  - task_id: TASK-039
+    title: "Add add_recurring_task MCP tool"
+    spec_ref: REQ-013
+    plan_ref: COMP-004
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-025]
+    acceptance:
+      - "Tool schema defined per plan"
+      - "Calls Task Service via Dapr to create task"
+      - "Calls Recurrence Service via Dapr to create pattern"
+      - "Returns task with recurrence info"
+      - "Integration test with test services"
+    files_to_modify:
+      - "chatbot/mcp-server/src/tools.ts"
+      - "chatbot/mcp-server/tests/tools.test.ts"
+
+  - task_id: TASK-040
+    title: "Add set_due_date MCP tool"
+    spec_ref: REQ-013
+    plan_ref: COMP-004
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-022, TASK-034]
+    acceptance:
+      - "Tool schema defined"
+      - "Calls Task Service PUT /api/todos/{id}/due-date via Dapr"
+      - "Returns updated task"
+      - "Integration test"
+    files_to_modify:
+      - "chatbot/mcp-server/src/tools.ts"
+
+  - task_id: TASK-041
+    title: "Add search_tasks MCP tool"
+    spec_ref: REQ-013
+    plan_ref: COMP-004
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-017]
+    acceptance:
+      - "Tool schema with query and filters"
+      - "Calls Task Service GET /api/todos/search via Dapr"
+      - "Returns search results"
+      - "Integration test"
+    files_to_modify:
+      - "chatbot/mcp-server/src/tools.ts"
+
+  - task_id: TASK-042
+    title: "Add add_tags MCP tool"
+    spec_ref: REQ-013
+    plan_ref: COMP-004
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-018]
+    acceptance:
+      - "Tool schema defined"
+      - "Calls Task Service POST /api/todos/{id}/tags via Dapr"
+      - "Returns task with tags"
+      - "Integration test"
+    files_to_modify:
+      - "chatbot/mcp-server/src/tools.ts"
+
+  - task_id: TASK-043
+    title: "Add set_priority MCP tool"
+    spec_ref: REQ-013
+    plan_ref: COMP-004
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-021]
+    acceptance:
+      - "Tool schema defined"
+      - "Calls Task Service PUT /api/todos/{id}/priority via Dapr"
+      - "Returns updated task"
+      - "Integration test"
+    files_to_modify:
+      - "chatbot/mcp-server/src/tools.ts"
+
+---
+
+### Frontend Components
+
+  - task_id: TASK-044
+    title: "Create TaskPriority component"
+    spec_ref: REQ-003
+    plan_ref: COMP-008
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-021]
+    acceptance:
+      - "Dropdown with Low/Medium/High/Critical options"
+      - "Calls PUT /api/todos/{id}/priority on change"
+      - "Updates UI optimistically"
+      - "Visual indicators (colors/icons) for each priority"
+      - "Component tests pass"
+    files_to_create:
+      - "frontend/components/TaskPriority.tsx"
+      - "frontend/components/__tests__/TaskPriority.test.tsx"
+
+  - task_id: TASK-045
+    title: "Create TaskTags component"
+    spec_ref: REQ-004
+    plan_ref: COMP-008
+    priority: medium
+    status: pending
+    complexity: medium
+    dependencies: [TASK-018, TASK-019]
+    acceptance:
+      - "Display tags as chips/badges"
+      - "Input field to add new tags"
+      - "X button to remove tags"
+      - "Calls POST /api/todos/{id}/tags and DELETE endpoints"
+      - "Component tests pass"
+    files_to_create:
+      - "frontend/components/TaskTags.tsx"
+      - "frontend/components/__tests__/TaskTags.test.tsx"
+
+  - task_id: TASK-046
+    title: "Create TaskSearch component"
+    spec_ref: REQ-005
+    plan_ref: COMP-008
+    priority: high
+    status: pending
+    complexity: large
+    dependencies: [TASK-017]
+    acceptance:
+      - "Search input field"
+      - "Filter panel: status, priority, tags, due date range"
+      - "Calls GET /api/todos/search"
+      - "Displays results with highlighting"
+      - "Debounced search (500ms)"
+      - "Component tests pass"
+    files_to_create:
+      - "frontend/components/TaskSearch.tsx"
+      - "frontend/components/TaskSearchFilters.tsx"
+      - "frontend/components/TaskSearchResults.tsx"
+
+  - task_id: TASK-047
+    title: "Create DueDatePicker component"
+    spec_ref: REQ-002
+    plan_ref: COMP-008
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-022]
+    acceptance:
+      - "datetime-local input for due date"
+      - "Reminder schedule selector (checkboxes for 1h, 1d, 1w)"
+      - "Calls PUT /api/todos/{id}/due-date"
+      - "Displays overdue tasks in red"
+      - "Component tests pass"
+    files_to_create:
+      - "frontend/components/DueDatePicker.tsx"
+      - "frontend/components/ReminderSchedulePicker.tsx"
+
+  - task_id: TASK-048
+    title: "Update TodoItem component to show priority, tags, due date"
+    spec_ref: REQ-002, REQ-003, REQ-004
+    plan_ref: COMP-008
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-044, TASK-045, TASK-047]
+    acceptance:
+      - "Integrates TaskPriority component"
+      - "Integrates TaskTags component"
+      - "Shows due date with overdue indicator"
+      - "Shows recurring task icon if applicable"
+      - "Responsive layout"
+      - "Component tests pass"
+    files_to_modify:
+      - "frontend/components/TodoItem.tsx"
+
+  - task_id: TASK-049
+    title: "Add search bar to TodoList page"
+    spec_ref: REQ-005
+    plan_ref: COMP-008
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-046]
+    acceptance:
+      - "TaskSearch component integrated into /todos page"
+      - "Search replaces or filters existing task list"
+      - "Clear search button"
+      - "E2E test for search flow"
+    files_to_modify:
+      - "frontend/app/todos/page.tsx"
+
+  - task_id: TASK-050
+    title: "Update apiCall helper to handle new endpoints"
+    spec_ref: REQ-002, REQ-003, REQ-004, REQ-005
+    plan_ref: COMP-008
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "No changes needed if apiCall is generic"
+      - "Add TypeScript types for new request/response shapes"
+      - "Update error handling for new status codes"
+    files_to_modify:
+      - "frontend/lib/api.ts"
+      - "frontend/types/task.ts"
+
+---
+
+## Milestone 4: Infrastructure - Kafka, Dapr, Kubernetes (Week 4-5)
+
+### Kafka Setup (Strimzi)
+
+  - task_id: TASK-051
+    title: "Install Strimzi Operator on Minikube"
+    spec_ref: REQ-008
+    plan_ref: COMP-007
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Create kafka namespace: kubectl create ns kafka"
+      - "Apply Strimzi operator: kubectl apply -f strimzi-operator.yaml -n kafka"
+      - "Verify operator running: kubectl get pods -n kafka"
+      - "Document installation steps in README"
+    commands:
+      - "kubectl create namespace kafka"
+      - "kubectl apply -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka"
+      - "kubectl wait --for=condition=ready pod -l name=strimzi-cluster-operator -n kafka --timeout=300s"
+
+  - task_id: TASK-052
+    title: "Create Kafka cluster YAML and deploy"
+    spec_ref: REQ-008
+    plan_ref: COMP-007
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-051]
+    acceptance:
+      - "kafka-cluster.yaml created per plan (3 brokers, 3 zookeepers)"
+      - "Apply: kubectl apply -f k8s/kafka/kafka-cluster.yaml -n kafka"
+      - "Wait for ready: kubectl wait kafka/kafka-cluster --for=condition=Ready --timeout=600s -n kafka"
+      - "Verify brokers running: kubectl get pods -n kafka | grep kafka-cluster-kafka"
+    files_to_create:
+      - "k8s/kafka/kafka-cluster.yaml"
+
+  - task_id: TASK-053
+    title: "Create Kafka topics (task-events, reminders, task-updates)"
+    spec_ref: REQ-006
+    plan_ref: COMP-007
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-052]
+    acceptance:
+      - "topics.yaml created with 3 KafkaTopic resources"
+      - "Apply: kubectl apply -f k8s/kafka/topics.yaml -n kafka"
+      - "Verify topics: kubectl get kafkatopics -n kafka"
+      - "Test producing/consuming message with kafka-console-producer/consumer"
+    files_to_create:
+      - "k8s/kafka/topics.yaml"
+
+---
+
+### Dapr Setup
+
+  - task_id: TASK-054
+    title: "Install Dapr on Minikube"
+    spec_ref: REQ-007, REQ-008
+    plan_ref: COMP-005
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Install Dapr CLI: curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | bash"
+      - "Initialize Dapr on k8s: dapr init -k --wait"
+      - "Verify: kubectl get pods -n dapr-system"
+      - "Dapr components: dapr-operator, dapr-sidecar-injector, dapr-sentry, dapr-placement"
+    commands:
+      - "dapr init -k --wait --runtime-version 1.12"
+      - "kubectl wait --for=condition=ready pod -l app=dapr-operator -n dapr-system --timeout=300s"
+
+  - task_id: TASK-055
+    title: "Create Dapr Pub/Sub component (Kafka)"
+    spec_ref: REQ-007
+    plan_ref: COMP-005
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-053, TASK-054]
+    acceptance:
+      - "pubsub.yaml created per plan"
+      - "Metadata: brokers = kafka-cluster-kafka-bootstrap.kafka:9092"
+      - "Apply: kubectl apply -f k8s/dapr/components/pubsub.yaml"
+      - "Verify: kubectl get component -n default"
+    files_to_create:
+      - "k8s/dapr/components/pubsub.yaml"
+
+  - task_id: TASK-056
+    title: "Create Dapr State Store component (Redis)"
+    spec_ref: REQ-007
+    plan_ref: COMP-005
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "statestore.yaml created"
+      - "Install Redis: helm install redis bitnami/redis --set auth.enabled=false"
+      - "Metadata: redisHost = redis-master.default:6379"
+      - "Apply component YAML"
+      - "Test: curl localhost:3500/v1.0/state/redis-state/testkey"
+    files_to_create:
+      - "k8s/dapr/components/statestore.yaml"
+    commands:
+      - "helm repo add bitnami https://charts.bitnami.com/bitnami"
+      - "helm install redis bitnami/redis --set auth.enabled=false"
+
+  - task_id: TASK-057
+    title: "Create Dapr Secrets component (Kubernetes secrets)"
+    spec_ref: REQ-007
+    plan_ref: COMP-005
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "secrets.yaml created"
+      - "Type: secretstores.kubernetes"
+      - "Apply component YAML"
+    files_to_create:
+      - "k8s/dapr/components/secrets.yaml"
+
+  - task_id: TASK-058
+    title: "Create Dapr Cron Binding for Recurrence Service"
+    spec_ref: REQ-007
+    plan_ref: COMP-005
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "cron-recurrence.yaml created"
+      - "Schedule: */1 * * * * (every minute)"
+      - "Triggers POST to recurrence-service on /api/recurrence/process"
+      - "Apply component YAML"
+    files_to_create:
+      - "k8s/dapr/bindings/cron-recurrence.yaml"
+
+  - task_id: TASK-059
+    title: "Create Dapr Cron Binding for Reminder Service"
+    spec_ref: REQ-007
+    plan_ref: COMP-005
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "cron-reminder.yaml created"
+      - "Schedule: */1 * * * *"
+      - "Triggers POST to reminder-service on /api/reminders/process"
+      - "Apply component YAML"
+    files_to_create:
+      - "k8s/dapr/bindings/cron-reminder.yaml"
+
+---
+
+### Kubernetes Deployments
+
+  - task_id: TASK-060
+    title: "Create Kubernetes Deployment for Task Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-054]
+    acceptance:
+      - "task-service.yaml created with Deployment, Service, HPA"
+      - "Dapr annotations: enabled=true, app-id=task-service, app-port=8001"
+      - "Environment: DATABASE_URL (from secret), DAPR_HTTP_PORT=3500"
+      - "Resources: requests (100m CPU, 128Mi), limits (500m, 512Mi)"
+      - "Liveness/readiness probes on /api/health"
+      - "HPA: 2-10 replicas, CPU target 70%"
+      - "Apply and verify: kubectl get pods -l app=task-service"
+    files_to_create:
+      - "k8s/deployments/task-service.yaml"
+
+  - task_id: TASK-061
+    title: "Create Kubernetes Deployment for Recurrence Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-031, TASK-054]
+    acceptance:
+      - "recurrence-service.yaml created"
+      - "Dapr annotations: app-id=recurrence-service, app-port=8002"
+      - "Similar to task-service deployment"
+      - "Apply and verify"
+    files_to_create:
+      - "k8s/deployments/recurrence-service.yaml"
+
+  - task_id: TASK-062
+    title: "Create Kubernetes Deployment for Reminder Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: [TASK-038, TASK-054]
+    acceptance:
+      - "reminder-service.yaml created"
+      - "Dapr annotations: app-id=reminder-service, app-port=8003"
+      - "Apply and verify"
+    files_to_create:
+      - "k8s/deployments/reminder-service.yaml"
+
+  - task_id: TASK-063
+    title: "Create Kubernetes secret for app credentials"
+    spec_ref: REQ-007
+    plan_ref: COMP-006
+    priority: high
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "Create secret: kubectl create secret generic app-secrets --from-literal=database-url=$DATABASE_URL --from-literal=openai-api-key=$OPENAI_API_KEY"
+      - "Verify: kubectl get secret app-secrets"
+      - "Secret referenced in all deployment YAMLs"
+    commands:
+      - "kubectl create secret generic app-secrets --from-env-file=.env.production"
+
+  - task_id: TASK-064
+    title: "Create Kubernetes Deployment for Chat Service"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "chat-service.yaml created"
+      - "Dapr annotations: app-id=chat-service, app-port=3002"
+      - "Apply and verify"
+    files_to_create:
+      - "k8s/deployments/chat-service.yaml"
+
+  - task_id: TASK-065
+    title: "Create Kubernetes Deployment for MCP HTTP Server"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: [TASK-054]
+    acceptance:
+      - "mcp-http-server.yaml created"
+      - "Dapr annotations: app-id=mcp-http-server, app-port=3003"
+      - "Apply and verify"
+    files_to_create:
+      - "k8s/deployments/mcp-http-server.yaml"
+
+  - task_id: TASK-066
+    title: "Create Kubernetes Deployment for Frontend"
+    spec_ref: REQ-008
+    plan_ref: COMP-006
+    priority: medium
+    status: pending
+    complexity: small
+    dependencies: []
+    acceptance:
+      - "frontend.yaml created"
+      - "No Dapr sidecar needed (frontend doesn't call Dapr directly)"
+      - "Ingress resource for HTTPS access"
+      - "Apply and verify"
+    files_to_create:
+      - "k8s/deployments/frontend.yaml"
+      - "k8s/ingress/frontend-ingress.yaml"
+
+---
+
+## Milestone 5: Testing & CI/CD (Week 5-6)
+
+### Testing
+
+  - task_id: TASK-067
+    title: "Write integration tests for Task Service with Kafka"
+    spec_ref: REQ-006
+    plan_ref: COMP-001
+    priority: high
+    status: pending
+    complexity: large
+    dependencies: [TASK-013, TASK-053]
+    acceptance:
+      - "Use testcontainers to spin up Kafka"
+      - "Test: create task → verify event published"
+      - "Test: update task → verify event with diff"
+      - "Test: delete task → verify event published"
+      - "All tests pass: pytest backend/tests/integration/"
+    files_to_create:
+      - "backend/tests/integration/test_event_publishing.py"
+
+  - task_id: TASK-068
+    title: "Write integration tests for Recurrence Service"
+    spec_ref: REQ-001
+    plan_ref: COMP-002
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-026]
+    acceptance:
+      - "Test: daily recurrence spawns task after 1 minute"
+      - "Test: weekly recurrence spawns on correct day"
+      - "Test: max_occurrences stops spawning"
+      - "Test: end_date stops spawning"
+      - "All tests pass"
+    files_to_create:
+      - "backend/recurrence-service/tests/integration/test_recurrence_processor.py"
+
+  - task_id: TASK-069
+    title: "Write E2E tests for recurring tasks"
+    spec_ref: REQ-001
+    plan_ref: COMP-008
+    priority: high
+    status: pending
+    complexity: large
+    dependencies: [TASK-039, TASK-048]
+    acceptance:
+      - "Playwright test: create recurring task via UI"
+      - "Test: verify recurrence pattern shown"
+      - "Test: mock Cron trigger → verify new instance appears"
+      - "Test: edit recurrence pattern"
+      - "Test: delete recurring task"
+      - "All tests pass: npm run test:e2e"
+    files_to_create:
+      - "frontend/tests/e2e/recurring-tasks.spec.ts"
+
+  - task_id: TASK-070
+    title: "Write E2E tests for search and filter"
+    spec_ref: REQ-005
+    plan_ref: COMP-008
+    priority: medium
+    status: pending
+    complexity: medium
+    dependencies: [TASK-046, TASK-049]
+    acceptance:
+      - "Test: search for task by keyword"
+      - "Test: filter by priority"
+      - "Test: filter by tags"
+      - "Test: filter by due date range"
+      - "Test: combine multiple filters"
+      - "All tests pass"
+    files_to_create:
+      - "frontend/tests/e2e/search.spec.ts"
+
+  - task_id: TASK-071
+    title: "Run load tests with k6"
+    spec_ref: REQ-014
+    plan_ref: COMP-009
+    priority: medium
+    status: pending
+    complexity: medium
+    dependencies: [TASK-060]
+    acceptance:
+      - "k6 script created: load-test.js"
+      - "Simulate 1,000 concurrent users creating/updating tasks"
+      - "Target: P95 latency < 100ms"
+      - "Target: Kafka throughput 1,000 events/second"
+      - "Report generated with results"
+    files_to_create:
+      - "tests/load/load-test.js"
+    commands:
+      - "k6 run tests/load/load-test.js"
+
+---
+
+### CI/CD Pipeline
+
+  - task_id: TASK-072
+    title: "Create GitHub Actions workflow for CI (test + build)"
+    spec_ref: REQ-011
+    plan_ref: COMP-009
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: []
+    acceptance:
+      - "Workflow: .github/workflows/ci.yaml"
+      - "Jobs: test-backend, test-frontend, build-images"
+      - "Runs on push to main and PRs"
+      - "Pushes images to ghcr.io"
+      - "Failed tests block merge"
+      - "Coverage report uploaded"
+    files_to_create:
+      - ".github/workflows/ci.yaml"
+
+  - task_id: TASK-073
+    title: "Create GitHub Actions workflow for CD (staging)"
+    spec_ref: REQ-011
+    plan_ref: COMP-009
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-072]
+    acceptance:
+      - "Workflow: .github/workflows/cd-staging.yaml"
+      - "Triggered after CI success on main branch"
+      - "Deploys to staging namespace with Helm"
+      - "Runs smoke tests"
+      - "Runs E2E tests on staging"
+      - "Sends Slack notification on failure"
+    files_to_create:
+      - ".github/workflows/cd-staging.yaml"
+
+  - task_id: TASK-074
+    title: "Create GitHub Actions workflow for CD (production)"
+    spec_ref: REQ-011
+    plan_ref: COMP-009
+    priority: high
+    status: pending
+    complexity: medium
+    dependencies: [TASK-073]
+    acceptance:
+      - "Workflow: .github/workflows/cd-production.yaml"
+      - "Requires manual approval"
+      - "Deploys to production namespace"
+      - "Monitors for 15 minutes"
+      - "Auto-rollback if error rate > 5%"
+    files_to_create:
+      - ".github/workflows/cd-production.yaml"
+
+  - task_id: TASK-075
+    title: "Create Helm chart for TodoApp"
+    spec_ref: REQ-010
+    plan_ref: COMP-009
+    priority: medium
+    status: pending
+    complexity: large
+    dependencies: [TASK-060, TASK-061, TASK-062]
+    acceptance:
+      - "Helm chart created: k8s/charts/todoapp/"
+      - "Templates for all services"
+      - "Values.yaml with configuration"
+      - "Chart.yaml with metadata"
+      - "Can install: helm install todoapp ./k8s/charts/todoapp"
+      - "Can upgrade: helm upgrade todoapp ./k8s/charts/todoapp"
+    files_to_create:
+      - "k8s/charts/todoapp/Chart.yaml"
+      - "k8s/charts/todoapp/values.yaml"
+      - "k8s/charts/todoapp/templates/*.yaml"
+
+---
+
+## Task Dependencies Graph
+
+```
+TASK-001 to TASK-008: Migrations (parallel)
+    ↓
+TASK-009: Run migrations
+    ↓
+TASK-010, TASK-011: Models
+    ↓
+TASK-012: Event Publisher
+    ↓
+TASK-013 to TASK-022: Task Service endpoints (can run in parallel)
+
+TASK-023 to TASK-031: Recurrence Service (sequential)
+TASK-032 to TASK-038: Reminder Service (sequential)
+
+TASK-039 to TASK-043: MCP tools (depend on backend endpoints)
+TASK-044 to TASK-050: Frontend components (depend on backend endpoints)
+
+TASK-051 to TASK-053: Kafka setup (sequential)
+TASK-054 to TASK-059: Dapr setup (sequential, depends on TASK-053 for pubsub)
+TASK-060 to TASK-066: K8s deployments (parallel, depend on TASK-054)
+
+TASK-067 to TASK-071: Testing (depend on respective features)
+TASK-072 to TASK-075: CI/CD (sequential)
+```
+
+---
+
+## Implementation Order
+
+**Week 1:** TASK-001 to TASK-022 (Database + Task Service)
+**Week 2:** TASK-023 to TASK-038 (New Services)
+**Week 3:** TASK-039 to TASK-050 (MCP + Frontend)
+**Week 4:** TASK-051 to TASK-066 (Infrastructure)
+**Week 5:** TASK-067 to TASK-071 (Testing)
+**Week 6:** TASK-072 to TASK-075 (CI/CD + Deployment)
+
+---
+
+## Task Status Tracking
+
+**Pending:** 75 tasks
+**In Progress:** 0 tasks
+**Completed:** 0 tasks
+
+---
+
+**Next Step:** Begin implementation with TASK-001 (database migrations)
+
+All tasks follow the AGENTS.md workflow:
+- Each task references REQ-XXX and COMP-XXX
+- Commit messages will include task IDs: `[TASK-001] Add priority column migration`
+- Tasks updated in real-time as work progresses
+
+Ready to start implementation! 🚀

@@ -1,0 +1,95 @@
+# TASK-066: Ingress for TodoApp
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todoapp-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - todoapp.local
+        - api.todoapp.local
+      secretName: todoapp-tls
+  rules:
+    - host: todoapp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+    - host: api.todoapp.local
+      http:
+        paths:
+          - path: /api/todos
+            pathType: Prefix
+            backend:
+              service:
+                name: task-service
+                port:
+                  number: 8001
+          - path: /api/tags
+            pathType: Prefix
+            backend:
+              service:
+                name: task-service
+                port:
+                  number: 8001
+          - path: /api/chat
+            pathType: Prefix
+            backend:
+              service:
+                name: chat-service
+                port:
+                  number: 3002
+          - path: /api/recurrence
+            pathType: Prefix
+            backend:
+              service:
+                name: recurrence-service
+                port:
+                  number: 8002
+          - path: /api/reminders
+            pathType: Prefix
+            backend:
+              service:
+                name: reminder-service
+                port:
+                  number: 8003
+---
+# Local development ingress (for minikube)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todoapp-ingress-local
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: todoapp.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: task-service
+                port:
+                  number: 8001

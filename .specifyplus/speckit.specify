@@ -1,0 +1,728 @@
+# Phase V Specifications - TodoApp Advanced Features
+
+version: "1.0"
+phase: "Phase V - Advanced Cloud Deployment"
+created: "2026-01-06"
+status: "draft"
+
+---
+
+## Part A: Advanced Features
+
+### REQ-001: Recurring Tasks
+
+priority: high
+category: "Core Feature"
+epic: "Advanced Task Management"
+
+description: |
+  Users can create tasks that automatically spawn new instances based on a recurrence pattern.
+  This enables habit tracking, recurring chores, and regular reminders without manual creation.
+
+user_story: |
+  As a user, I want to create recurring tasks (daily, weekly, monthly) so that I don't have to
+  manually create the same task repeatedly.
+
+acceptance_criteria:
+  - User can create a task with a recurrence pattern (daily, weekly, monthly, custom)
+  - User can specify recurrence end date or number of occurrences
+  - System automatically spawns new task instances at the correct time
+  - User can complete individual instances without affecting future occurrences
+  - User can modify the recurrence pattern (applies to future instances only)
+  - User can delete a recurring task (with option to delete all future instances)
+  - Completed instances show in task history
+  - Recurrence engine runs via Dapr Cron Binding (every 1 minute check)
+
+technical_requirements:
+  - New table: recurrence_pattern (id, task_id, frequency, interval, end_date, max_occurrences)
+  - Recurrence Service (FastAPI) with Dapr Cron Binding
+  - Event publishing: task.spawned event to Kafka
+  - MCP tool: add_recurring_task(title, description, pattern, interval, end_date)
+
+test_scenarios:
+  - Create daily task, verify spawns at midnight every day
+  - Create weekly task (every Monday), verify correct spawning
+  - Complete recurring task instance, verify future instances unaffected
+  - Delete recurring task, verify future instances cancelled
+  - Edit recurrence pattern, verify only future instances affected
+
+---
+
+### REQ-002: Due Dates and Reminders
+
+priority: high
+category: "Core Feature"
+epic: "Advanced Task Management"
+
+description: |
+  Users can set due dates for tasks and receive reminders before the deadline.
+  Supports multiple reminder times and notification channels.
+
+user_story: |
+  As a user, I want to set due dates for my tasks and get reminded before they're due,
+  so I never miss important deadlines.
+
+acceptance_criteria:
+  - User can set a due date (date + time) for any task
+  - User can configure reminder schedule (e.g., 1 hour before, 1 day before)
+  - System sends reminders via in-app notifications (Phase V scope)
+  - Overdue tasks are highlighted in the UI
+  - User can snooze reminders (reschedule for later)
+  - User can mark task complete from reminder notification
+  - Reminders respect user timezone
+
+technical_requirements:
+  - New columns: todo.due_date (timestamp), todo.reminder_config (jsonb)
+  - Reminder Service (FastAPI) with Dapr Cron Binding
+  - Event publishing: reminder.triggered event to Kafka
+  - Frontend: UI for setting due dates and reminder preferences
+  - MCP tool: set_due_date(task_id, due_date, reminder_schedule)
+
+test_scenarios:
+  - Set due date for tomorrow 3pm, verify reminder 1 hour before
+  - Overdue task shows red highlight in UI
+  - Complete task, verify reminder cancelled
+  - Snooze reminder, verify it triggers again later
+  - Multiple reminders for same task (1 day, 1 hour before)
+
+---
+
+### REQ-003: Task Priorities
+
+priority: medium
+category: "Core Feature"
+epic: "Advanced Task Management"
+
+description: |
+  Users can assign priority levels to tasks (low, medium, high, critical) to organize
+  and sort their workload by importance.
+
+user_story: |
+  As a user, I want to assign priorities to my tasks so I can focus on the most important
+  items first.
+
+acceptance_criteria:
+  - User can set priority: low, medium, high, critical
+  - Tasks default to medium priority if not specified
+  - UI shows priority with visual indicators (colors, icons)
+  - User can filter tasks by priority
+  - User can sort tasks by priority
+  - Priority changes emit events to Kafka
+
+technical_requirements:
+  - New column: todo.priority (enum: low, medium, high, critical)
+  - Database migration to add priority column with default 'medium'
+  - Update Task Service to handle priority in CRUD operations
+  - Event publishing: task.priority_changed event to Kafka
+  - Frontend: Priority selector component
+  - MCP tool: set_priority(task_id, priority)
+
+test_scenarios:
+  - Create task with high priority, verify stored correctly
+  - Filter tasks to show only critical priority
+  - Sort tasks by priority (critical → high → medium → low)
+  - Change priority from low to high, verify event published
+
+---
+
+### REQ-004: Task Tags
+
+priority: medium
+category: "Core Feature"
+epic: "Advanced Task Management"
+
+description: |
+  Users can add multiple tags to tasks for flexible categorization and organization.
+  Tags enable custom workflows and filtering beyond simple lists.
+
+user_story: |
+  As a user, I want to tag my tasks with custom labels (e.g., #work, #personal, #urgent)
+  so I can organize and find tasks more easily.
+
+acceptance_criteria:
+  - User can add multiple tags to a task
+  - Tags are free-form text (user can create new tags on the fly)
+  - User can remove tags from a task
+  - User can filter tasks by one or more tags
+  - Tag autocomplete suggests existing tags
+  - Tag cloud shows most frequently used tags
+  - Tag changes emit events to Kafka
+
+technical_requirements:
+  - New table: tags (id, name, user_id, created_at)
+  - New table: task_tags (task_id, tag_id) - many-to-many relationship
+  - Update Task Service to handle tag operations
+  - Event publishing: task.tagged, task.untagged events to Kafka
+  - Frontend: Tag input component with autocomplete
+  - MCP tool: add_tags(task_id, tags[]), remove_tags(task_id, tags[])
+
+test_scenarios:
+  - Add tags ["work", "urgent"] to task, verify stored
+  - Filter tasks by tag "work", verify correct results
+  - Remove tag "urgent", verify removed and event published
+  - Autocomplete shows existing tags when typing
+  - Tag cloud displays most used tags
+
+---
+
+### REQ-005: Search and Filter
+
+priority: high
+category: "Core Feature"
+epic: "Advanced Task Management"
+
+description: |
+  Users can search tasks by title/description and apply multiple filters
+  (status, priority, tags, due date) to quickly find relevant tasks.
+
+user_story: |
+  As a user, I want to search and filter my tasks so I can quickly find specific items
+  among hundreds of tasks.
+
+acceptance_criteria:
+  - Full-text search across task title and description
+  - Search results highlight matching text
+  - Combine filters: status + priority + tags + due date range
+  - Save filter presets (e.g., "Work tasks due this week")
+  - Search is fast (<100ms) even with 10,000 tasks
+  - Sort results by relevance, date, or priority
+
+technical_requirements:
+  - PostgreSQL full-text search with GIN index
+  - New column: todo.search_vector (tsvector) - auto-updated trigger
+  - Task Service: GET /api/todos/search endpoint
+  - Query parameters: q (search text), status, priority, tags[], due_before, due_after
+  - Frontend: Search bar with filter panel
+  - MCP tool: search_tasks(query, filters)
+
+test_scenarios:
+  - Search "buy groceries", verify matching tasks
+  - Filter: status=pending + priority=high + tag=work
+  - Search with 10,000 tasks, verify response < 100ms
+  - Save filter preset "Urgent work tasks"
+  - Sort search results by due date
+
+---
+
+### REQ-006: Event-Driven Architecture with Kafka
+
+priority: high
+category: "Architecture"
+epic: "Infrastructure"
+
+description: |
+  All task state changes publish events to Kafka, enabling real-time updates,
+  audit trails, and future event-driven features (analytics, notifications, webhooks).
+
+user_story: |
+  As a developer, I want all task operations to publish events so we can build
+  real-time features and maintain a complete audit trail.
+
+acceptance_criteria:
+  - All task CRUD operations publish events to Kafka
+  - Events include: task.created, task.updated, task.completed, task.deleted
+  - Events contain full task payload + metadata (user_id, timestamp)
+  - Events are published after database transaction commits
+  - Failed event publishing triggers retry with exponential backoff
+  - Dead letter queue for permanently failed events
+  - Event consumers can process events idempotently
+
+technical_requirements:
+  - Kafka cluster with 3 brokers (Strimzi on Kubernetes)
+  - Topics: task-events (3 partitions), reminders (1 partition), task-updates (1 partition)
+  - Dapr Pub/Sub component configured for Kafka
+  - Task Service: EventPublisher class with Dapr HTTP API
+  - Outbox pattern for transactional event publishing
+  - Event schema validation with JSON Schema
+
+event_schemas:
+  task.created:
+    task_id: integer
+    user_id: string
+    title: string
+    description: string (optional)
+    priority: enum (low, medium, high, critical)
+    tags: array of strings
+    due_date: ISO 8601 timestamp (optional)
+    created_at: ISO 8601 timestamp
+
+  task.updated:
+    task_id: integer
+    user_id: string
+    changes:
+      field_name:
+        old_value: any
+        new_value: any
+    updated_at: ISO 8601 timestamp
+
+  task.completed:
+    task_id: integer
+    user_id: string
+    completed_at: ISO 8601 timestamp
+
+  task.deleted:
+    task_id: integer
+    user_id: string
+    deleted_at: ISO 8601 timestamp
+
+test_scenarios:
+  - Create task, verify task.created event published to Kafka
+  - Update task, verify task.updated event with diff
+  - Kafka broker down, verify events buffered and retried
+  - Duplicate event delivery, verify idempotent processing
+  - Monitor Kafka lag, verify < 1000 messages
+
+---
+
+### REQ-007: Dapr Integration
+
+priority: high
+category: "Architecture"
+epic: "Infrastructure"
+
+description: |
+  Integrate Dapr for distributed application runtime, providing Pub/Sub, State Management,
+  Service Invocation, Bindings, and Secrets Management.
+
+user_story: |
+  As a developer, I want to use Dapr building blocks so I can abstract infrastructure
+  dependencies and simplify distributed systems development.
+
+acceptance_criteria:
+  - All services deployed with Dapr sidecars
+  - Pub/Sub: Kafka abstraction for event publishing
+  - State Store: Redis for caching and distributed state
+  - Service Invocation: Dapr-to-Dapr communication
+  - Bindings: Cron triggers for Recurrence and Reminder services
+  - Secrets: Kubernetes secrets accessed via Dapr API
+
+technical_requirements:
+  - Dapr 1.12+ installed on Kubernetes cluster
+  - Dapr components defined in YAML:
+    - pubsub.yaml (Kafka)
+    - statestore.yaml (Redis)
+    - secrets.yaml (Kubernetes secrets)
+    - bindings.yaml (Cron for scheduled jobs)
+  - All services use Dapr SDK or HTTP API
+  - Service-to-service calls via Dapr app-id
+  - No direct Kafka SDK, Redis SDK, or secret access in code
+
+dapr_components:
+  pubsub:
+    name: "kafka-pubsub"
+    type: "pubsub.kafka"
+    metadata:
+      - name: "brokers"
+        value: "kafka-cluster-kafka-bootstrap:9092"
+      - name: "consumerGroup"
+        value: "todoapp"
+
+  statestore:
+    name: "redis-state"
+    type: "state.redis"
+    metadata:
+      - name: "redisHost"
+        value: "redis-master:6379"
+
+  binding:
+    name: "cron-recurrence"
+    type: "bindings.cron"
+    metadata:
+      - name: "schedule"
+        value: "*/1 * * * *"  # Every minute
+
+test_scenarios:
+  - Publish event via Dapr, verify consumed by subscriber
+  - Save state via Dapr, retrieve from Redis
+  - Call Task Service from Chat Service via Dapr app-id
+  - Cron binding triggers Recurrence Service every minute
+  - Access DATABASE_URL secret via Dapr secrets API
+
+---
+
+## Part B: Local Deployment
+
+### REQ-008: Minikube Deployment
+
+priority: high
+category: "Infrastructure"
+epic: "Local Deployment"
+
+description: |
+  Deploy the entire TodoApp stack to Minikube for local development and testing,
+  including Dapr, Kafka, and all microservices.
+
+acceptance_criteria:
+  - Minikube cluster with 4 CPUs, 8GB RAM
+  - Dapr installed via Helm chart
+  - Kafka deployed via Strimzi Operator
+  - All 5 services deployed as Kubernetes Deployments
+  - Services accessible via kubectl port-forward
+  - Health checks passing for all services
+  - End-to-end test passes on Minikube
+
+technical_requirements:
+  - Minikube driver: docker or hyperkit
+  - Kubernetes 1.28+
+  - Helm 3.12+
+  - Strimzi Operator 0.38+
+  - Dapr 1.12+
+  - Helm charts for each service (in k8s/charts/)
+  - Skaffold for local development workflow
+
+deployment_steps:
+  - Start Minikube: minikube start --cpus=4 --memory=8192
+  - Install Dapr: helm install dapr dapr/dapr --namespace dapr-system
+  - Install Strimzi: kubectl apply -f strimzi-operator.yaml
+  - Deploy Kafka: kubectl apply -f kafka-cluster.yaml
+  - Deploy Redis: helm install redis bitnami/redis
+  - Deploy services: kubectl apply -f k8s/deployments/
+  - Verify: kubectl get pods -A
+
+test_scenarios:
+  - Deploy to Minikube, verify all pods running
+  - Create task via frontend, verify in database
+  - Kafka event flow: create task → event → consumer
+  - Dapr service invocation: Chat → Task Service
+  - Cron binding triggers Recurrence Service
+
+---
+
+### REQ-009: Local Development Workflow
+
+priority: medium
+category: "Developer Experience"
+epic: "Local Deployment"
+
+description: |
+  Streamlined local development with hot reload, debugging, and easy service restarts.
+
+acceptance_criteria:
+  - Docker Compose for local development (without Kubernetes)
+  - Skaffold for Kubernetes development (with auto-rebuild)
+  - VS Code launch configurations for debugging
+  - One-command setup: make dev-start
+  - Service logs aggregated with kubectl logs or stern
+  - Database migrations run automatically on startup
+
+technical_requirements:
+  - docker-compose.yaml with all services
+  - skaffold.yaml for Kubernetes dev workflow
+  - Makefile with common commands (dev-start, dev-stop, test, deploy)
+  - VS Code .vscode/launch.json for Python and Node.js debugging
+  - Tilt for advanced Kubernetes dev workflow (optional)
+
+---
+
+## Part C: Cloud Deployment
+
+### REQ-010: Cloud Kubernetes Deployment (AKS/GKE/OKE)
+
+priority: high
+category: "Infrastructure"
+epic: "Cloud Deployment"
+
+description: |
+  Deploy TodoApp to production cloud Kubernetes cluster with high availability,
+  auto-scaling, and managed infrastructure.
+
+acceptance_criteria:
+  - Kubernetes cluster on AKS, GKE, or OKE
+  - Managed Kafka (Confluent Cloud or Redpanda Cloud)
+  - Managed Redis (Azure Cache, Google Memorystore, or OCI Cache)
+  - Managed PostgreSQL (Neon, Supabase, or cloud provider)
+  - Ingress controller with TLS (cert-manager + Let's Encrypt)
+  - Horizontal Pod Autoscaler (HPA) for all services
+  - Prometheus + Grafana for monitoring
+  - GitHub Actions CI/CD pipeline
+
+technical_requirements:
+  - Terraform or Pulumi for infrastructure as code
+  - Helm charts for application deployment
+  - GitOps with ArgoCD or FluxCD (optional)
+  - TLS certificates via cert-manager
+  - External secrets operator for cloud secrets
+  - Cloud provider: AKS (Azure), GKE (Google Cloud), or OKE (Oracle Cloud)
+
+deployment_architecture:
+  - Ingress (HTTPS) → Next.js Frontend
+  - Frontend → Task Service, Chat Service (via Dapr)
+  - Task Service → PostgreSQL, Kafka
+  - Recurrence Service → Kafka, PostgreSQL (via Dapr Cron)
+  - Reminder Service → Kafka (via Dapr Cron)
+  - All services → Dapr sidecars → Managed Kafka
+
+test_scenarios:
+  - Deploy to cloud cluster, verify HTTPS access
+  - Horizontal scaling: load test triggers HPA
+  - Pod failure: kill pod, verify auto-recovery
+  - Rolling update: deploy new version, verify zero downtime
+
+---
+
+### REQ-011: CI/CD Pipeline
+
+priority: high
+category: "Infrastructure"
+epic: "Cloud Deployment"
+
+description: |
+  Automated CI/CD pipeline with GitHub Actions for testing, building, and deploying
+  to staging and production environments.
+
+acceptance_criteria:
+  - Pipeline triggered on push to main branch
+  - Stages: Build → Test → Deploy Staging → Manual Approval → Deploy Production
+  - Docker images pushed to container registry (GitHub Container Registry)
+  - Automated tests run on every PR
+  - Failed builds block deployment
+  - Rollback mechanism for failed deployments
+
+technical_requirements:
+  - GitHub Actions workflows in .github/workflows/
+  - Workflows: ci.yaml (tests), cd-staging.yaml, cd-production.yaml
+  - Secrets stored in GitHub Actions secrets
+  - Container registry: ghcr.io (GitHub Container Registry)
+  - Helm chart versioning and releases
+  - Deployment approval gates for production
+
+pipeline_stages:
+  build:
+    - Checkout code
+    - Run unit tests (pytest)
+    - Check code coverage (>80%)
+    - Build Docker images
+    - Push to ghcr.io
+
+  deploy_staging:
+    - Deploy to staging cluster (Helm upgrade)
+    - Run smoke tests
+    - Run E2E tests (Playwright)
+
+  deploy_production:
+    - Manual approval required
+    - Deploy to production cluster
+    - Run health checks
+    - Monitor for 15 minutes
+    - Auto-rollback if errors > 5%
+
+test_scenarios:
+  - Push to main, verify pipeline runs
+  - Failed test blocks deployment
+  - Deploy to staging, run E2E tests
+  - Approve production deployment
+  - Failed deployment triggers rollback
+
+---
+
+### REQ-012: Monitoring and Logging
+
+priority: medium
+category: "Observability"
+epic: "Cloud Deployment"
+
+description: |
+  Comprehensive monitoring, logging, and alerting for production environment.
+
+acceptance_criteria:
+  - Prometheus for metrics collection
+  - Grafana dashboards for visualization
+  - Structured JSON logging from all services
+  - Log aggregation with Loki or cloud provider logging
+  - Alerts for critical failures (PagerDuty, Slack, email)
+  - Distributed tracing with OpenTelemetry + Jaeger
+
+technical_requirements:
+  - Prometheus Operator for Kubernetes
+  - Grafana dashboards for each service
+  - Loki for log aggregation
+  - OpenTelemetry collector for traces
+  - Alert rules in Prometheus
+  - Integration with PagerDuty or Slack
+
+metrics:
+  - request_count (counter)
+  - request_duration_seconds (histogram)
+  - kafka_messages_published (counter)
+  - kafka_lag (gauge)
+  - database_query_duration (histogram)
+  - active_users (gauge)
+
+alerts:
+  - Service down > 5 minutes
+  - Error rate > 5%
+  - Kafka lag > 1000 messages
+  - Database query time P95 > 100ms
+  - Pod crashlooping
+
+---
+
+## MCP Tools Extensions
+
+### REQ-013: New MCP Tools
+
+priority: medium
+category: "AI Integration"
+epic: "Advanced Features"
+
+description: |
+  Extend MCP server with new tools for advanced task management features.
+
+new_tools:
+  - name: "add_recurring_task"
+    description: "Create a task with recurrence pattern"
+    parameters:
+      - title: string
+      - description: string (optional)
+      - priority: enum (low, medium, high, critical)
+      - recurrence_pattern: object
+        - frequency: enum (daily, weekly, monthly, custom)
+        - interval: integer (e.g., every 2 days)
+        - end_date: ISO 8601 timestamp (optional)
+        - max_occurrences: integer (optional)
+
+  - name: "set_due_date"
+    description: "Set due date and reminder for a task"
+    parameters:
+      - task_id: integer
+      - due_date: ISO 8601 timestamp
+      - reminder_schedule: array of reminder times (e.g., ["1h", "1d"])
+
+  - name: "search_tasks"
+    description: "Search tasks with filters"
+    parameters:
+      - query: string (search text)
+      - status: enum (pending, completed) (optional)
+      - priority: enum (low, medium, high, critical) (optional)
+      - tags: array of strings (optional)
+      - due_before: ISO 8601 timestamp (optional)
+      - due_after: ISO 8601 timestamp (optional)
+
+  - name: "add_tags"
+    description: "Add tags to a task"
+    parameters:
+      - task_id: integer
+      - tags: array of strings
+
+  - name: "set_priority"
+    description: "Set task priority"
+    parameters:
+      - task_id: integer
+      - priority: enum (low, medium, high, critical)
+
+---
+
+## Non-Functional Requirements
+
+### REQ-014: Performance
+
+targets:
+  - API response time P95: < 100ms
+  - Kafka event latency end-to-end: < 50ms
+  - Frontend load time (LCP): < 2.5s
+  - Database query time P95: < 50ms
+  - Support 10,000 tasks per user without degradation
+  - Handle 1,000 concurrent users
+
+---
+
+### REQ-015: Scalability
+
+targets:
+  - Horizontal scaling: 2-10 pods per service
+  - Database connection pooling: 20 connections per service
+  - Kafka throughput: 1,000 events/second
+  - Redis cache hit rate: > 80%
+
+---
+
+### REQ-016: Reliability
+
+targets:
+  - Service uptime: 99.9% (< 43 minutes downtime/month)
+  - Data durability: 99.999999999% (11 nines via cloud provider)
+  - Automated failover: < 60 seconds
+  - Backup and restore: daily backups, 30-day retention
+
+---
+
+## Acceptance Criteria for Phase V Completion
+
+phase_complete_when:
+  - ✅ All Part A features implemented and tested
+  - ✅ Minikube deployment working (Part B)
+  - ✅ Cloud deployment to AKS/GKE/OKE (Part C)
+  - ✅ CI/CD pipeline operational
+  - ✅ Monitoring and logging configured
+  - ✅ Load tests passing (1,000 concurrent users)
+  - ✅ E2E tests passing
+  - ✅ Documentation complete (README, API docs, architecture diagrams)
+  - ✅ Zero critical bugs
+  - ✅ Security audit passed
+
+---
+
+## Out of Scope (Future Phases)
+
+not_in_phase_v:
+  - Mobile apps (iOS, Android)
+  - Email/SMS notifications (only in-app for now)
+  - Multi-tenancy / team workspaces
+  - Third-party integrations (Google Calendar, Slack, etc.)
+  - Advanced analytics dashboard
+  - Task templates
+  - Subtasks / hierarchical tasks
+  - File attachments
+
+---
+
+## Dependencies
+
+external_dependencies:
+  - OpenAI API (for chat agent)
+  - Neon PostgreSQL (managed database)
+  - Confluent Cloud or Redpanda Cloud (managed Kafka) - for cloud deployment
+  - Cloud provider account (Azure, GCP, or Oracle Cloud)
+  - GitHub Actions (CI/CD)
+
+---
+
+## Risks and Mitigations
+
+risks:
+  - risk_id: RISK-001
+    description: "Kafka event ordering issues"
+    impact: "High - duplicate tasks or missed events"
+    mitigation: "Use single partition per user_id for ordered events"
+
+  - risk_id: RISK-002
+    description: "Dapr learning curve"
+    impact: "Medium - slower development"
+    mitigation: "Start with simple building blocks (Pub/Sub), expand gradually"
+
+  - risk_id: RISK-003
+    description: "Cloud cost overruns"
+    impact: "Medium - budget concerns"
+    mitigation: "Set up billing alerts, use spot instances for non-production"
+
+  - risk_id: RISK-004
+    description: "Database migration failures"
+    impact: "High - data loss or downtime"
+    mitigation: "Test migrations on staging, have rollback plan"
+
+---
+
+**Version History:**
+
+- v1.0 (2026-01-06): Initial specifications for Phase V
+- 16 requirements defined
+- Part A (Advanced Features), Part B (Local Deployment), Part C (Cloud Deployment)
+
+---
+
+**Next Steps:**
+
+1. Review and approve specifications
+2. Create implementation plan (speckit.plan)
+3. Break down into tasks (speckit.tasks)
+4. Begin implementation following AGENTS.md workflow

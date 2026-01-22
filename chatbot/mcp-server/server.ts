@@ -28,6 +28,33 @@ import {
   ValidationError as DeleteTaskValidationError,
 } from "./skills/delete-task.js";
 
+// Phase V MCP skills
+import {
+  searchTasksTool,
+  executeSearchTasks,
+  ValidationError as SearchTasksValidationError,
+} from "./skills/search-tasks.js";
+import {
+  setPriorityTool,
+  executeSetPriority,
+  ValidationError as SetPriorityValidationError,
+} from "./skills/set-priority.js";
+import {
+  addTagsTool,
+  executeAddTags,
+  ValidationError as AddTagsValidationError,
+} from "./skills/add-tags.js";
+import {
+  setDueDateTool,
+  executeSetDueDate,
+  ValidationError as SetDueDateValidationError,
+} from "./skills/set-due-date.js";
+import {
+  addRecurringTaskTool,
+  executeAddRecurringTask,
+  ValidationError as AddRecurringTaskValidationError,
+} from "./skills/add-recurring-task.js";
+
 /**
  * MCP Server for Todo Chatbot
  * Implements 5 skills: add_task, list_tasks, update_task, complete_task, delete_task
@@ -74,6 +101,12 @@ export class TodoChatbotMCPServer {
           updateTaskTool,
           completeTaskTool,
           deleteTaskTool,
+          // Phase V tools
+          searchTasksTool,
+          setPriorityTool,
+          addTagsTool,
+          setDueDateTool,
+          addRecurringTaskTool,
         ],
       };
     });
@@ -126,6 +159,27 @@ export class TodoChatbotMCPServer {
             result = await executeDeleteTask(args as any, context);
             break;
 
+          // Phase V tools
+          case "search_tasks":
+            result = await executeSearchTasks(args as any, context);
+            break;
+
+          case "set_priority":
+            result = await executeSetPriority(args as any, context);
+            break;
+
+          case "add_tags":
+            result = await executeAddTags(args as any, context);
+            break;
+
+          case "set_due_date":
+            result = await executeSetDueDate(args as any, context);
+            break;
+
+          case "add_recurring_task":
+            result = await executeAddRecurringTask(args as any, context);
+            break;
+
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -146,6 +200,11 @@ export class TodoChatbotMCPServer {
           error instanceof UpdateTaskValidationError ||
           error instanceof CompleteTaskValidationError ||
           error instanceof DeleteTaskValidationError ||
+          error instanceof SearchTasksValidationError ||
+          error instanceof SetPriorityValidationError ||
+          error instanceof AddTagsValidationError ||
+          error instanceof SetDueDateValidationError ||
+          error instanceof AddRecurringTaskValidationError ||
           error.name === "ValidationError"
         ) {
           return {

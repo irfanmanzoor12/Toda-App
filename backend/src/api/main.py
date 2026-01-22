@@ -9,11 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import tasks
 from src.api.routes import chat
+from src.api.routes import tags
 
 app = FastAPI(
-    title="Todo API - Phase III",
-    description="Todo application with AI chatbot and JWT authentication",
-    version="3.0.0"
+    title="Todo API - Phase V",
+    description="Todo application with AI chatbot, event-driven architecture, and advanced features",
+    version="5.0.0"
 )
 
 # CORS configuration for local development
@@ -33,6 +34,7 @@ app.add_middleware(
 # Register routes
 app.include_router(tasks.router)
 app.include_router(chat.router)  # Phase III chat endpoint
+app.include_router(tags.router)  # Phase V tag management
 
 
 @app.get("/")

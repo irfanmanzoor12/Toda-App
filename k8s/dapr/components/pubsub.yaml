@@ -1,0 +1,24 @@
+# TASK-055: Dapr Pub/Sub Component (Kafka)
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: "kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+    - name: consumerGroup
+      value: "todoapp-consumer-group"
+    - name: authType
+      value: "none"
+    - name: maxMessageBytes
+      value: "1048576"  # 1MB
+    - name: consumeRetryInterval
+      value: "100ms"
+scopes:
+  - task-service
+  - recurrence-service
+  - reminder-service

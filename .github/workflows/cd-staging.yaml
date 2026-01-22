@@ -1,0 +1,81 @@
+# TASK-073: CD Pipeline - Staging Deployment
+name: CD Staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+env:
+  CLUSTER_NAME: todoapp-staging
+  NAMESPACE: staging
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+          echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Dapr components
+        run: |
+          kubectl apply -f k8s/dapr/components/ -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/dapr/bindings/ -n ${{ env.NAMESPACE }}
+
+      - name: Deploy services
+        run: |
+          # Update image tags to latest
+          for file in k8s/deployments/*.yaml; do
+            envsubst < "$file" | kubectl apply -f - -n ${{ env.NAMESPACE }}
+          done
+
+      - name: Wait for deployments
+        run: |
+          kubectl rollout status deployment/task-service -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          # Get service URL
+          FRONTEND_URL=$(kubectl get ingress todoapp-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.rules[0].host}')
+
+          # Basic health checks
+          curl -f https://$FRONTEND_URL/api/health || exit 1
+          echo "Smoke tests passed"
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Staging deployment failed for ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Staging Deployment Failed*\nRepo: ${{ github.repository }}\nCommit: ${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

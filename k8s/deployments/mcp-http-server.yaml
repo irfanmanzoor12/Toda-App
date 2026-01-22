@@ -1,0 +1,68 @@
+# TASK-065: Kubernetes Deployment for MCP HTTP Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-http-server
+  namespace: default
+  labels:
+    app: mcp-http-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mcp-http-server
+  template:
+    metadata:
+      labels:
+        app: mcp-http-server
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "mcp-http-server"
+        dapr.io/app-port: "3003"
+        dapr.io/enable-api-logging: "true"
+    spec:
+      containers:
+        - name: mcp-http-server
+          image: ghcr.io/todoapp/mcp-http-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3003
+          env:
+            - name: TASK_SERVICE_URL
+              value: "http://localhost:3500/v1.0/invoke/task-service/method"
+            - name: RECURRENCE_SERVICE_URL
+              value: "http://localhost:3500/v1.0/invoke/recurrence-service/method"
+            - name: DAPR_HTTP_PORT
+              value: "3500"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-http-server
+  namespace: default
+spec:
+  selector:
+    app: mcp-http-server
+  ports:
+    - port: 3003
+      targetPort: 3003
+  type: ClusterIP

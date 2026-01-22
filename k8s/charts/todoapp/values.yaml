@@ -1,0 +1,195 @@
+# TASK-075: Helm Values for TodoApp
+# Default values for todoapp deployment
+
+global:
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
+  namespace: default
+
+# Task Service
+taskService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: todoapp/task-service
+    tag: latest
+    pullPolicy: Always
+  port: 8001
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
+  dapr:
+    enabled: true
+    appId: task-service
+    appPort: 8001
+
+# Recurrence Service
+recurrenceService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: todoapp/recurrence-service
+    tag: latest
+    pullPolicy: Always
+  port: 8002
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  dapr:
+    enabled: true
+    appId: recurrence-service
+    appPort: 8002
+
+# Reminder Service
+reminderService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: todoapp/reminder-service
+    tag: latest
+    pullPolicy: Always
+  port: 8003
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  dapr:
+    enabled: true
+    appId: reminder-service
+    appPort: 8003
+
+# Chat Service
+chatService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: todoapp/chat-service
+    tag: latest
+    pullPolicy: Always
+  port: 3002
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  dapr:
+    enabled: true
+    appId: chat-service
+    appPort: 3002
+
+# MCP HTTP Server
+mcpServer:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: todoapp/mcp-http-server
+    tag: latest
+    pullPolicy: Always
+  port: 3003
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  dapr:
+    enabled: true
+    appId: mcp-http-server
+    appPort: 3003
+
+# Frontend
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: todoapp/frontend
+    tag: latest
+    pullPolicy: Always
+  port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Ingress
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: todoapp.local
+      paths:
+        - path: /
+          service: frontend
+          port: 3000
+    - host: api.todoapp.local
+      paths:
+        - path: /api/todos
+          service: task-service
+          port: 8001
+        - path: /api/tags
+          service: task-service
+          port: 8001
+        - path: /api/chat
+          service: chat-service
+          port: 3002
+        - path: /api/recurrence
+          service: recurrence-service
+          port: 8002
+        - path: /api/reminders
+          service: reminder-service
+          port: 8003
+  tls: []
+
+# Secrets
+secrets:
+  databaseUrl: ""
+  openaiApiKey: ""
+  betterAuthSecret: ""
+
+# Dapr components
+dapr:
+  pubsub:
+    name: kafka-pubsub
+    brokers: kafka-cluster-kafka-bootstrap.kafka:9092
+  stateStore:
+    name: redis-state
+    redisHost: redis-master:6379
+  cron:
+    recurrenceSchedule: "*/1 * * * *"
+    reminderSchedule: "*/1 * * * *"
+
+# Redis (subchart)
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  architecture: standalone
+
+# Kafka (external - deployed via Strimzi)
+kafka:
+  external: true
+  bootstrapServers: kafka-cluster-kafka-bootstrap.kafka:9092

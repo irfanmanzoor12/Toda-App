@@ -1,0 +1,1758 @@
+# Phase V Implementation Plan - TodoApp
+
+version: "1.0"
+phase: "Phase V - Advanced Cloud Deployment"
+created: "2026-01-06"
+status: "active"
+
+---
+
+## Architecture Overview
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Cloud / Minikube                         │
+│                                                                   │
+│  ┌──────────────┐                                                │
+│  │   Ingress    │ (HTTPS, TLS termination)                      │
+│  │  Controller  │                                                │
+│  └──────┬───────┘                                                │
+│         │                                                         │
+│  ┌──────▼────────┐                                               │
+│  │   Next.js     │ (Port 3000)                                   │
+│  │   Frontend    │ (Better Auth, React)                          │
+│  └──────┬────────┘                                               │
+│         │ (JWT in Authorization header)                          │
+│         │                                                         │
+│  ┌──────▼─────────────────────────────────────────────────────┐ │
+│  │                    Dapr Sidecars                           │ │
+│  │  (Service Invocation, Pub/Sub, State, Secrets)             │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│         │                                                         │
+│  ┌──────┴──────┬──────────┬──────────┬──────────┐              │
+│  │             │          │          │          │              │
+│  ▼             ▼          ▼          ▼          ▼              │
+│ ┌────┐    ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐         │
+│ │Task│    │Recur-  │ │Reminder│ │ Chat   │ │  MCP   │         │
+│ │Svc │    │rence   │ │Service │ │Service │ │  HTTP  │         │
+│ │8001│    │Service │ │  8003  │ │  3002  │ │  3003  │         │
+│ └─┬──┘    │  8002  │ └───┬────┘ └───┬────┘ └───┬────┘         │
+│   │       └───┬────┘     │          │          │              │
+│   │           │          │          │          │              │
+│   └───────────┴──────────┴──────────┴──────────┘              │
+│               │                                                 │
+│        ┌──────▼─────────┐        ┌──────────────┐             │
+│        │  Apache Kafka   │        │  PostgreSQL  │             │
+│        │  (Strimzi)      │        │    (Neon)    │             │
+│        │  Topics:        │        │              │             │
+│        │  - task-events  │        │  Tables:     │             │
+│        │  - reminders    │        │  - todo      │             │
+│        │  - task-updates │        │  - tags      │             │
+│        └─────────────────┘        │  - task_tags │             │
+│                                    │  - recurrence│             │
+│        ┌─────────────┐            │  - messages  │             │
+│        │    Redis    │            │  - convos    │             │
+│        │ (State Store)│           └──────────────┘             │
+│        └─────────────┘                                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component Definitions
+
+### COMP-001: Task Service (Enhanced)
+
+**Specification Reference:** REQ-002, REQ-003, REQ-004, REQ-005, REQ-006
+
+**Technology Stack:**
+- Python 3.11+
+- FastAPI 0.104+
+- SQLAlchemy 2.0+
+- Dapr SDK (Python)
+- PostgreSQL
+
+**Responsibilities:**
+- Task CRUD operations (existing + enhanced)
+- Priority management
+- Tag management
+- Due date management
+- Full-text search
+- Event publishing to Kafka via Dapr Pub/Sub
+
+**API Endpoints:**
+
+```yaml
+# Existing endpoints (enhanced)
+GET /api/todos:
+  description: "List user's tasks with filters"
+  query_params:
+    status: "pending | completed (optional)"
+    priority: "low | medium | high | critical (optional)"
+    tags: "array of tag names (optional)"
+    due_before: "ISO 8601 timestamp (optional)"
+    due_after: "ISO 8601 timestamp (optional)"
+    limit: "integer (default: 100)"
+    offset: "integer (default: 0)"
+  response:
+    type: "array of Task objects"
+    includes:
+      - "task metadata"
+      - "priority"
+      - "tags"
+      - "due_date"
+      - "recurrence_pattern (if any)"
+
+POST /api/todos:
+  description: "Create new task"
+  request_body:
+    title: "string (required)"
+    description: "string (optional)"
+    priority: "enum (low, medium, high, critical) (default: medium)"
+    tags: "array of strings (optional)"
+    due_date: "ISO 8601 timestamp (optional)"
+    reminder_schedule: "array of reminder times (optional, e.g., ['1h', '1d'])"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Publishes task.created event to Kafka"
+
+PUT /api/todos/{id}:
+  description: "Update existing task"
+  request_body:
+    title: "string (optional)"
+    description: "string (optional)"
+    priority: "enum (optional)"
+    tags: "array of strings (optional)"
+    due_date: "ISO 8601 timestamp (optional)"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Publishes task.updated event with diff"
+
+DELETE /api/todos/{id}:
+  description: "Delete task (soft delete)"
+  response:
+    status: 204
+  side_effects:
+    - "Sets deleted_at timestamp"
+    - "Publishes task.deleted event"
+
+POST /api/todos/{id}/complete:
+  description: "Mark task as completed"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Sets completed_at timestamp"
+    - "Publishes task.completed event"
+
+# New endpoints for Phase V
+GET /api/todos/search:
+  description: "Full-text search tasks"
+  query_params:
+    q: "string (search query, required)"
+    status: "pending | completed (optional)"
+    priority: "low | medium | high | critical (optional)"
+    tags: "array of tag names (optional)"
+    due_before: "ISO 8601 timestamp (optional)"
+    due_after: "ISO 8601 timestamp (optional)"
+    sort_by: "relevance | due_date | priority | created_at (default: relevance)"
+    limit: "integer (default: 50)"
+  response:
+    type: "array of Task objects with relevance score"
+
+POST /api/todos/{id}/tags:
+  description: "Add tags to task"
+  request_body:
+    tags: "array of strings (required)"
+  response:
+    type: "Task object with updated tags"
+  side_effects:
+    - "Creates new tags if they don't exist"
+    - "Publishes task.tagged event"
+
+DELETE /api/todos/{id}/tags/{tag_name}:
+  description: "Remove tag from task"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Publishes task.untagged event"
+
+GET /api/tags:
+  description: "List all user's tags with usage count"
+  query_params:
+    sort_by: "usage | name (default: usage)"
+    limit: "integer (default: 50)"
+  response:
+    type: "array of Tag objects with count"
+
+PUT /api/todos/{id}/priority:
+  description: "Update task priority"
+  request_body:
+    priority: "enum (low, medium, high, critical)"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Publishes task.priority_changed event"
+
+PUT /api/todos/{id}/due-date:
+  description: "Set or update due date"
+  request_body:
+    due_date: "ISO 8601 timestamp (required)"
+    reminder_schedule: "array of reminder times (optional)"
+  response:
+    type: "Task object"
+  side_effects:
+    - "Publishes task.due_date_set event"
+    - "Schedules reminders if specified"
+```
+
+**Database Schema Changes:**
+
+```sql
+-- Migration 001: Add priority column
+ALTER TABLE todo ADD COLUMN priority VARCHAR(20) DEFAULT 'medium';
+ALTER TABLE todo ADD CONSTRAINT check_priority
+  CHECK (priority IN ('low', 'medium', 'high', 'critical'));
+
+-- Migration 002: Add due_date and reminder columns
+ALTER TABLE todo ADD COLUMN due_date TIMESTAMP WITH TIME ZONE;
+ALTER TABLE todo ADD COLUMN reminder_schedule JSONB;
+
+-- Migration 003: Add soft delete
+ALTER TABLE todo ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+CREATE INDEX idx_todo_deleted_at ON todo(deleted_at) WHERE deleted_at IS NULL;
+
+-- Migration 004: Add full-text search
+ALTER TABLE todo ADD COLUMN search_vector tsvector;
+CREATE INDEX idx_todo_search ON todo USING GIN(search_vector);
+
+-- Trigger to auto-update search_vector
+CREATE FUNCTION todo_search_trigger() RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('english', COALESCE(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('english', COALESCE(NEW.description, '')), 'B');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER todo_search_update
+  BEFORE INSERT OR UPDATE ON todo
+  FOR EACH ROW EXECUTE FUNCTION todo_search_trigger();
+
+-- Migration 005: Create tags table
+CREATE TABLE tags (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(50) NOT NULL,
+  user_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(name, user_id)
+);
+CREATE INDEX idx_tags_user_id ON tags(user_id);
+
+-- Migration 006: Create task_tags junction table
+CREATE TABLE task_tags (
+  task_id INTEGER NOT NULL REFERENCES todo(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (task_id, tag_id)
+);
+CREATE INDEX idx_task_tags_task_id ON task_tags(task_id);
+CREATE INDEX idx_task_tags_tag_id ON task_tags(tag_id);
+```
+
+**Event Publishing Implementation:**
+
+```python
+# backend/src/events/publisher.py
+import httpx
+from datetime import datetime
+from typing import Dict, Any
+
+class EventPublisher:
+    def __init__(self, dapr_port: int = 3500):
+        self.dapr_url = f"http://localhost:{dapr_port}/v1.0/publish"
+        self.pubsub_name = "kafka-pubsub"
+
+    async def publish_event(self, topic: str, event_type: str, data: Dict[str, Any]):
+        """Publish event to Kafka via Dapr Pub/Sub"""
+        event = {
+            "event_type": event_type,
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": data
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.dapr_url}/{self.pubsub_name}/{topic}",
+                json=event,
+                timeout=5.0
+            )
+            response.raise_for_status()
+
+    async def publish_task_created(self, task: Task, user_id: str):
+        await self.publish_event(
+            topic="task-events",
+            event_type="task.created",
+            data={
+                "task_id": task.id,
+                "user_id": user_id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "tags": [tag.name for tag in task.tags],
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "created_at": task.created_at.isoformat()
+            }
+        )
+
+    async def publish_task_updated(self, task_id: int, user_id: str, changes: Dict):
+        await self.publish_event(
+            topic="task-events",
+            event_type="task.updated",
+            data={
+                "task_id": task_id,
+                "user_id": user_id,
+                "changes": changes,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        )
+```
+
+**File Structure:**
+```
+backend/src/
+├── api/routes/
+│   ├── tasks.py (enhanced)
+│   ├── tags.py (new)
+│   └── search.py (new)
+├── models/
+│   ├── task.py (enhanced)
+│   ├── tag.py (new)
+│   └── task_tag.py (new)
+├── events/
+│   ├── publisher.py (new)
+│   └── schemas.py (new)
+└── alembic/versions/
+    ├── 001_add_priority.py
+    ├── 002_add_due_date.py
+    ├── 003_add_soft_delete.py
+    ├── 004_add_fulltext_search.py
+    ├── 005_create_tags_table.py
+    └── 006_create_task_tags_table.py
+```
+
+---
+
+### COMP-002: Recurrence Service (New)
+
+**Specification Reference:** REQ-001, REQ-006, REQ-007
+
+**Technology Stack:**
+- Python 3.11+
+- FastAPI 0.104+
+- SQLAlchemy 2.0+
+- Dapr SDK (Cron Binding, Pub/Sub)
+- PostgreSQL
+
+**Responsibilities:**
+- Manage recurrence patterns
+- Calculate next occurrence dates
+- Spawn new task instances automatically
+- Process Dapr Cron trigger every minute
+
+**API Endpoints:**
+
+```yaml
+POST /api/recurrence/patterns:
+  description: "Create recurrence pattern for a task"
+  request_body:
+    task_id: "integer (required)"
+    frequency: "daily | weekly | monthly | custom (required)"
+    interval: "integer (e.g., every 2 days, default: 1)"
+    day_of_week: "0-6 for weekly (0=Sunday, optional)"
+    day_of_month: "1-31 for monthly (optional)"
+    end_date: "ISO 8601 timestamp (optional)"
+    max_occurrences: "integer (optional)"
+  response:
+    type: "RecurrencePattern object"
+
+GET /api/recurrence/patterns/{id}:
+  description: "Get recurrence pattern details"
+  response:
+    type: "RecurrencePattern object with spawned tasks count"
+
+PUT /api/recurrence/patterns/{id}:
+  description: "Update recurrence pattern (applies to future instances only)"
+  request_body:
+    frequency: "enum (optional)"
+    interval: "integer (optional)"
+    end_date: "ISO 8601 timestamp (optional)"
+  response:
+    type: "RecurrencePattern object"
+
+DELETE /api/recurrence/patterns/{id}:
+  description: "Stop recurring task (soft delete)"
+  query_params:
+    delete_future: "boolean (default: true)"
+  response:
+    status: 204
+  side_effects:
+    - "Sets deleted_at on recurrence pattern"
+    - "Optionally deletes future task instances"
+
+POST /api/recurrence/process:
+  description: "Process recurrence spawning (triggered by Dapr Cron)"
+  internal: true
+  response:
+    spawned_count: "integer"
+```
+
+**Database Schema:**
+
+```sql
+-- Migration 007: Create recurrence_pattern table
+CREATE TABLE recurrence_pattern (
+  id SERIAL PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES todo(id) ON DELETE CASCADE,
+  user_id VARCHAR(255) NOT NULL,
+  frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly', 'custom')),
+  interval INTEGER DEFAULT 1 CHECK (interval > 0),
+  day_of_week INTEGER CHECK (day_of_week BETWEEN 0 AND 6),
+  day_of_month INTEGER CHECK (day_of_month BETWEEN 1 AND 31),
+  end_date TIMESTAMP WITH TIME ZONE,
+  max_occurrences INTEGER,
+  occurrences_count INTEGER DEFAULT 0,
+  last_spawned_at TIMESTAMP WITH TIME ZONE,
+  next_occurrence TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  deleted_at TIMESTAMP WITH TIME ZONE,
+  UNIQUE(task_id)
+);
+
+CREATE INDEX idx_recurrence_next_occurrence ON recurrence_pattern(next_occurrence)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_recurrence_user_id ON recurrence_pattern(user_id);
+```
+
+**Recurrence Processing Logic:**
+
+```python
+# backend/recurrence-service/src/processor.py
+from datetime import datetime, timedelta
+from sqlalchemy import select
+from models import RecurrencePattern, Task
+
+class RecurrenceProcessor:
+    def __init__(self, db_session, event_publisher):
+        self.db = db_session
+        self.publisher = event_publisher
+
+    async def process_due_recurrences(self):
+        """Called by Dapr Cron binding every minute"""
+        now = datetime.utcnow()
+
+        # Find patterns due for spawning
+        stmt = select(RecurrencePattern).where(
+            RecurrencePattern.next_occurrence <= now,
+            RecurrencePattern.deleted_at.is_(None)
+        )
+        patterns = await self.db.execute(stmt)
+
+        spawned_count = 0
+        for pattern in patterns.scalars():
+            if self._should_spawn(pattern):
+                await self._spawn_task_instance(pattern)
+                spawned_count += 1
+
+        return spawned_count
+
+    def _should_spawn(self, pattern: RecurrencePattern) -> bool:
+        """Check if pattern should spawn a new instance"""
+        if pattern.end_date and datetime.utcnow() > pattern.end_date:
+            return False
+        if pattern.max_occurrences and pattern.occurrences_count >= pattern.max_occurrences:
+            return False
+        return True
+
+    async def _spawn_task_instance(self, pattern: RecurrencePattern):
+        """Create new task instance and update pattern"""
+        # Get original task as template
+        original_task = await self.db.get(Task, pattern.task_id)
+
+        # Create new task instance
+        new_task = Task(
+            user_id=pattern.user_id,
+            title=original_task.title,
+            description=original_task.description,
+            priority=original_task.priority,
+            due_date=pattern.next_occurrence,
+            parent_task_id=pattern.task_id,  # Link to original
+            completed=False
+        )
+        self.db.add(new_task)
+
+        # Update pattern
+        pattern.occurrences_count += 1
+        pattern.last_spawned_at = datetime.utcnow()
+        pattern.next_occurrence = self._calculate_next_occurrence(pattern)
+
+        await self.db.commit()
+
+        # Publish event
+        await self.publisher.publish_event(
+            topic="task-events",
+            event_type="task.spawned",
+            data={
+                "task_id": new_task.id,
+                "parent_task_id": pattern.task_id,
+                "user_id": pattern.user_id,
+                "recurrence_pattern_id": pattern.id,
+                "due_date": new_task.due_date.isoformat()
+            }
+        )
+
+    def _calculate_next_occurrence(self, pattern: RecurrencePattern) -> datetime:
+        """Calculate next occurrence based on pattern"""
+        current = pattern.next_occurrence
+
+        if pattern.frequency == 'daily':
+            return current + timedelta(days=pattern.interval)
+
+        elif pattern.frequency == 'weekly':
+            return current + timedelta(weeks=pattern.interval)
+
+        elif pattern.frequency == 'monthly':
+            # Add months (approximate with 30 days for simplicity, refine later)
+            return current + timedelta(days=30 * pattern.interval)
+
+        return current
+```
+
+**Dapr Cron Binding Configuration:**
+
+```yaml
+# k8s/dapr/bindings/cron-recurrence.yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: cron-recurrence
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+  - name: schedule
+    value: "*/1 * * * *"  # Every minute
+  - name: direction
+    value: "input"
+```
+
+**Dockerfile:**
+```dockerfile
+# backend/recurrence-service/Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8002"]
+```
+
+---
+
+### COMP-003: Reminder Service (New)
+
+**Specification Reference:** REQ-002, REQ-006, REQ-007
+
+**Technology Stack:**
+- Python 3.11+
+- FastAPI 0.104+
+- Dapr SDK (Cron Binding, Pub/Sub)
+
+**Responsibilities:**
+- Monitor tasks with due dates
+- Send reminder notifications
+- Process Dapr Cron trigger every minute
+
+**API Endpoints:**
+
+```yaml
+POST /api/reminders/schedule:
+  description: "Schedule reminders for a task"
+  request_body:
+    task_id: "integer (required)"
+    due_date: "ISO 8601 timestamp (required)"
+    reminder_times: "array of offsets (e.g., ['1h', '1d', '1w'])"
+  response:
+    type: "array of Reminder objects"
+
+POST /api/reminders/process:
+  description: "Process due reminders (triggered by Dapr Cron)"
+  internal: true
+  response:
+    sent_count: "integer"
+
+DELETE /api/reminders/{task_id}:
+  description: "Cancel all reminders for a task"
+  response:
+    status: 204
+```
+
+**Database Schema:**
+
+```sql
+-- Migration 008: Create reminders table
+CREATE TABLE reminders (
+  id SERIAL PRIMARY KEY,
+  task_id INTEGER NOT NULL REFERENCES todo(id) ON DELETE CASCADE,
+  user_id VARCHAR(255) NOT NULL,
+  trigger_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  sent_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  cancelled_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_reminders_trigger_at ON reminders(trigger_at)
+  WHERE sent_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX idx_reminders_task_id ON reminders(task_id);
+```
+
+**Reminder Processing Logic:**
+
+```python
+# backend/reminder-service/src/processor.py
+from datetime import datetime
+from sqlalchemy import select
+
+class ReminderProcessor:
+    async def process_due_reminders(self):
+        """Called by Dapr Cron binding every minute"""
+        now = datetime.utcnow()
+
+        # Find reminders due for sending
+        stmt = select(Reminder).where(
+            Reminder.trigger_at <= now,
+            Reminder.sent_at.is_(None),
+            Reminder.cancelled_at.is_(None)
+        )
+        reminders = await self.db.execute(stmt)
+
+        sent_count = 0
+        for reminder in reminders.scalars():
+            await self._send_reminder(reminder)
+            sent_count += 1
+
+        return sent_count
+
+    async def _send_reminder(self, reminder: Reminder):
+        """Send reminder notification"""
+        # Get task details
+        task = await self.db.get(Task, reminder.task_id)
+
+        # Publish reminder event to Kafka
+        await self.publisher.publish_event(
+            topic="reminders",
+            event_type="reminder.triggered",
+            data={
+                "reminder_id": reminder.id,
+                "task_id": task.id,
+                "user_id": reminder.user_id,
+                "task_title": task.title,
+                "due_date": task.due_date.isoformat(),
+                "notification_type": "in-app"  # Phase V: in-app only
+            }
+        )
+
+        # Mark as sent
+        reminder.sent_at = datetime.utcnow()
+        await self.db.commit()
+```
+
+**Dapr Cron Binding Configuration:**
+
+```yaml
+# k8s/dapr/bindings/cron-reminder.yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: cron-reminder
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+  - name: schedule
+    value: "*/1 * * * *"  # Every minute
+  - name: direction
+    value: "input"
+```
+
+---
+
+### COMP-004: MCP Server (Enhanced)
+
+**Specification Reference:** REQ-013
+
+**New MCP Tools:**
+
+```typescript
+// chatbot/mcp-server/src/tools.ts
+
+export const NEW_TOOLS = [
+  {
+    name: "add_recurring_task",
+    description: "Create a task with recurrence pattern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Task title" },
+        description: { type: "string", description: "Task description" },
+        priority: {
+          type: "string",
+          enum: ["low", "medium", "high", "critical"],
+          default: "medium"
+        },
+        recurrence: {
+          type: "object",
+          properties: {
+            frequency: {
+              type: "string",
+              enum: ["daily", "weekly", "monthly", "custom"]
+            },
+            interval: { type: "number", default: 1 },
+            end_date: { type: "string", format: "date-time" },
+            max_occurrences: { type: "number" }
+          },
+          required: ["frequency"]
+        }
+      },
+      required: ["title", "recurrence"]
+    }
+  },
+
+  {
+    name: "set_due_date",
+    description: "Set due date and reminders for a task",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "number" },
+        due_date: { type: "string", format: "date-time" },
+        reminder_schedule: {
+          type: "array",
+          items: { type: "string" },
+          description: "e.g., ['1h', '1d', '1w']"
+        }
+      },
+      required: ["task_id", "due_date"]
+    }
+  },
+
+  {
+    name: "search_tasks",
+    description: "Search tasks with filters",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search text" },
+        status: { type: "string", enum: ["pending", "completed"] },
+        priority: { type: "string", enum: ["low", "medium", "high", "critical"] },
+        tags: { type: "array", items: { type: "string" } },
+        due_before: { type: "string", format: "date-time" },
+        due_after: { type: "string", format: "date-time" }
+      },
+      required: ["query"]
+    }
+  },
+
+  {
+    name: "add_tags",
+    description: "Add tags to a task",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "number" },
+        tags: { type: "array", items: { type: "string" } }
+      },
+      required: ["task_id", "tags"]
+    }
+  },
+
+  {
+    name: "set_priority",
+    description: "Set task priority",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "number" },
+        priority: { type: "string", enum: ["low", "medium", "high", "critical"] }
+      },
+      required: ["task_id", "priority"]
+    }
+  }
+];
+
+// Tool execution via Dapr service invocation
+async function executeAddRecurringTask(args: any, userId: string) {
+  const daprUrl = `http://localhost:3500/v1.0/invoke/task-service/method/api/todos`;
+
+  // Create base task
+  const taskResponse = await fetch(daprUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${userId}`
+    },
+    body: JSON.stringify({
+      title: args.title,
+      description: args.description,
+      priority: args.priority || 'medium'
+    })
+  });
+
+  const task = await taskResponse.json();
+
+  // Create recurrence pattern
+  const recurrenceUrl = `http://localhost:3500/v1.0/invoke/recurrence-service/method/api/recurrence/patterns`;
+
+  const recurrenceResponse = await fetch(recurrenceUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${userId}`
+    },
+    body: JSON.stringify({
+      task_id: task.id,
+      ...args.recurrence
+    })
+  });
+
+  return await recurrenceResponse.json();
+}
+```
+
+---
+
+### COMP-005: Dapr Configuration
+
+**Specification Reference:** REQ-007
+
+**Dapr Component: Kafka Pub/Sub**
+
+```yaml
+# k8s/dapr/components/pubsub.yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  # Local (Minikube) - Strimzi Kafka
+  - name: brokers
+    value: "kafka-cluster-kafka-bootstrap.kafka:9092"
+  - name: consumerGroup
+    value: "todoapp-group"
+  - name: clientID
+    value: "todoapp-client"
+  # Cloud - Confluent Cloud (via secret)
+  # - name: brokers
+  #   secretKeyRef:
+  #     name: kafka-credentials
+  #     key: brokers
+  # - name: authType
+  #   value: "certificate"
+  # - name: caCert
+  #   secretKeyRef:
+  #     name: kafka-credentials
+  #     key: caCert
+```
+
+**Dapr Component: Redis State Store**
+
+```yaml
+# k8s/dapr/components/statestore.yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: redis-state
+  namespace: default
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+  - name: redisHost
+    value: "redis-master.default:6379"
+  - name: redisPassword
+    secretKeyRef:
+      name: redis-credentials
+      key: password
+```
+
+**Dapr Component: Kubernetes Secrets**
+
+```yaml
+# k8s/dapr/components/secrets.yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kubernetes-secrets
+  namespace: default
+spec:
+  type: secretstores.kubernetes
+  version: v1
+  metadata: []
+```
+
+---
+
+### COMP-006: Kubernetes Deployment Architecture
+
+**Specification Reference:** REQ-008, REQ-010
+
+**Task Service Deployment:**
+
+```yaml
+# k8s/deployments/task-service.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-service
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: task-service
+  template:
+    metadata:
+      labels:
+        app: task-service
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "task-service"
+        dapr.io/app-port: "8001"
+        dapr.io/log-level: "info"
+    spec:
+      containers:
+      - name: task-service
+        image: ghcr.io/irfan/todoapp-task-service:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: database-url
+        - name: DAPR_HTTP_PORT
+          value: "3500"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-service
+  namespace: default
+spec:
+  selector:
+    app: task-service
+  ports:
+  - port: 8001
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: task-service-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: task-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+**Similar deployments for:**
+- Recurrence Service (port 8002)
+- Reminder Service (port 8003)
+- Chat Service (port 3002)
+- MCP HTTP Server (port 3003)
+- Next.js Frontend (port 3000)
+
+---
+
+### COMP-007: Kafka Deployment (Strimzi)
+
+**Specification Reference:** REQ-006, REQ-008
+
+**Strimzi Operator Installation:**
+
+```bash
+# Install Strimzi operator
+kubectl create namespace kafka
+kubectl apply -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+```
+
+**Kafka Cluster:**
+
+```yaml
+# k8s/kafka/kafka-cluster.yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: kafka-cluster
+  namespace: kafka
+spec:
+  kafka:
+    version: 3.5.0
+    replicas: 3
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2
+    storage:
+      type: jbod
+      volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        deleteClaim: false
+  zookeeper:
+    replicas: 3
+    storage:
+      type: persistent-claim
+      size: 5Gi
+      deleteClaim: false
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+```
+
+**Kafka Topics:**
+
+```yaml
+# k8s/kafka/topics.yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: task-events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000  # 7 days
+    segment.bytes: 1073741824
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: reminders
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 86400000  # 1 day
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: task-updates
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    retention.ms: 3600000  # 1 hour (ephemeral for UI updates)
+```
+
+---
+
+### COMP-008: Frontend Enhancements
+
+**Specification Reference:** REQ-002, REQ-003, REQ-004, REQ-005
+
+**New React Components:**
+
+```typescript
+// frontend/components/TaskPriority.tsx
+export function TaskPriority({
+  taskId,
+  priority
+}: {
+  taskId: number;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+}) {
+  const [currentPriority, setCurrentPriority] = useState(priority);
+
+  const updatePriority = async (newPriority: string) => {
+    await apiCall(`/api/todos/${taskId}/priority`, {
+      method: 'PUT',
+      body: JSON.stringify({ priority: newPriority })
+    });
+    setCurrentPriority(newPriority as any);
+  };
+
+  return (
+    <select value={currentPriority} onChange={(e) => updatePriority(e.target.value)}>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+  );
+}
+
+// frontend/components/TaskTags.tsx
+export function TaskTags({ taskId, tags }: { taskId: number; tags: string[] }) {
+  const [tagInput, setTagInput] = useState('');
+  const [currentTags, setCurrentTags] = useState(tags);
+
+  const addTag = async () => {
+    await apiCall(`/api/todos/${taskId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags: [tagInput] })
+    });
+    setCurrentTags([...currentTags, tagInput]);
+    setTagInput('');
+  };
+
+  const removeTag = async (tagName: string) => {
+    await apiCall(`/api/todos/${taskId}/tags/${tagName}`, {
+      method: 'DELETE'
+    });
+    setCurrentTags(currentTags.filter(t => t !== tagName));
+  };
+
+  return (
+    <div className="tags">
+      {currentTags.map(tag => (
+        <span key={tag} className="tag">
+          #{tag}
+          <button onClick={() => removeTag(tag)}>×</button>
+        </span>
+      ))}
+      <input
+        value={tagInput}
+        onChange={(e) => setTagInput(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && addTag()}
+        placeholder="Add tag..."
+      />
+    </div>
+  );
+}
+
+// frontend/components/TaskSearch.tsx
+export function TaskSearch() {
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({});
+  const [results, setResults] = useState([]);
+
+  const search = async () => {
+    const params = new URLSearchParams({ q: query, ...filters });
+    const data = await apiCall(`/api/todos/search?${params}`);
+    setResults(data);
+  };
+
+  return (
+    <div className="task-search">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search tasks..."
+      />
+      {/* Filter panel */}
+      <TaskSearchFilters filters={filters} setFilters={setFilters} />
+      <button onClick={search}>Search</button>
+      <TaskSearchResults results={results} />
+    </div>
+  );
+}
+
+// frontend/components/DueDatePicker.tsx
+export function DueDatePicker({ taskId, currentDueDate }: { taskId: number; currentDueDate?: string }) {
+  const [dueDate, setDueDate] = useState(currentDueDate);
+  const [reminders, setReminders] = useState(['1h']);
+
+  const saveDueDate = async () => {
+    await apiCall(`/api/todos/${taskId}/due-date`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        due_date: dueDate,
+        reminder_schedule: reminders
+      })
+    });
+  };
+
+  return (
+    <div className="due-date-picker">
+      <input
+        type="datetime-local"
+        value={dueDate}
+        onChange={(e) => setDueDate(e.target.value)}
+      />
+      <ReminderSchedulePicker reminders={reminders} setReminders={setReminders} />
+      <button onClick={saveDueDate}>Save</button>
+    </div>
+  );
+}
+```
+
+---
+
+### COMP-009: CI/CD Pipeline
+
+**Specification Reference:** REQ-011
+
+**GitHub Actions Workflow:**
+
+```yaml
+# .github/workflows/ci.yaml
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, phase-v-* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Run tests
+      env:
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test
+      run: |
+        cd backend
+        pytest --cov=src --cov-report=xml --cov-report=term
+
+    - name: Check coverage
+      run: |
+        cd backend
+        coverage report --fail-under=80
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run tests
+      run: |
+        cd frontend
+        npm run test
+
+    - name: Build
+      run: |
+        cd frontend
+        npm run build
+
+  build-images:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Task Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: true
+        tags: ghcr.io/${{ github.repository }}/task-service:${{ github.sha }}
+
+    - name: Build and push Recurrence Service
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend/recurrence-service
+        push: true
+        tags: ghcr.io/${{ github.repository }}/recurrence-service:${{ github.sha }}
+
+    # Similar for other services...
+
+  deploy-staging:
+    needs: build-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Configure kubeconfig
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Deploy with Helm
+      run: |
+        helm upgrade --install todoapp ./k8s/charts/todoapp \
+          --namespace staging \
+          --set image.tag=${{ github.sha }} \
+          --wait
+
+    - name: Run smoke tests
+      run: |
+        kubectl wait --for=condition=ready pod -l app=task-service -n staging --timeout=300s
+        curl -f https://staging.todoapp.com/api/health
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+    - name: Manual approval required
+      uses: trstringer/manual-approval@v1
+      with:
+        approvers: irfan
+
+    - uses: actions/checkout@v3
+
+    - name: Deploy to production
+      run: |
+        helm upgrade --install todoapp ./k8s/charts/todoapp \
+          --namespace production \
+          --set image.tag=${{ github.sha }} \
+          --wait
+```
+
+---
+
+## Sequence Diagrams
+
+### SEQ-001: Create Recurring Task Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant TaskSvc as Task Service
+    participant RecurSvc as Recurrence Service
+    participant Kafka
+    participant DB as PostgreSQL
+
+    User->>Frontend: Create recurring task
+    Frontend->>TaskSvc: POST /api/todos (with recurrence flag)
+    TaskSvc->>DB: INSERT INTO todo
+    TaskSvc->>RecurSvc: POST /api/recurrence/patterns
+    RecurSvc->>DB: INSERT INTO recurrence_pattern
+    RecurSvc->>Kafka: Publish task.created event
+    RecurSvc-->>Frontend: 201 Created
+    Frontend-->>User: Show success
+
+    Note over RecurSvc: Dapr Cron triggers every minute
+    RecurSvc->>DB: SELECT patterns due for spawning
+    RecurSvc->>DB: INSERT new task instance
+    RecurSvc->>DB: UPDATE recurrence_pattern (next_occurrence)
+    RecurSvc->>Kafka: Publish task.spawned event
+```
+
+### SEQ-002: Set Due Date with Reminders
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant TaskSvc as Task Service
+    participant ReminderSvc as Reminder Service
+    participant Kafka
+    participant DB
+
+    User->>Frontend: Set due date + reminders
+    Frontend->>TaskSvc: PUT /api/todos/{id}/due-date
+    TaskSvc->>DB: UPDATE todo SET due_date
+    TaskSvc->>ReminderSvc: POST /api/reminders/schedule
+    ReminderSvc->>DB: INSERT INTO reminders (multiple rows)
+    ReminderSvc-->>TaskSvc: Reminders scheduled
+    TaskSvc->>Kafka: Publish task.due_date_set event
+    TaskSvc-->>Frontend: 200 OK
+    Frontend-->>User: Show confirmation
+
+    Note over ReminderSvc: Dapr Cron triggers every minute
+    ReminderSvc->>DB: SELECT reminders WHERE trigger_at <= NOW()
+    ReminderSvc->>Kafka: Publish reminder.triggered event
+    ReminderSvc->>DB: UPDATE reminders SET sent_at
+```
+
+### SEQ-003: Search Tasks with Filters
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant TaskSvc as Task Service
+    participant DB
+
+    User->>Frontend: Enter search query + filters
+    Frontend->>TaskSvc: GET /api/todos/search?q=...&priority=high&tags=work
+    TaskSvc->>DB: SELECT with full-text search + filters
+    Note over DB: Uses GIN index on search_vector
+    DB-->>TaskSvc: Results with relevance scores
+    TaskSvc-->>Frontend: JSON array of tasks
+    Frontend-->>User: Display search results
+```
+
+### SEQ-004: Event-Driven Task Update Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant TaskSvc as Task Service
+    participant Kafka
+    participant EventConsumer as Event Consumer
+    participant WebSocket as WebSocket Server
+
+    User->>Frontend: Update task (via UI or chat)
+    Frontend->>TaskSvc: PUT /api/todos/{id}
+    TaskSvc->>TaskSvc: Calculate diff (old vs new)
+    TaskSvc->>TaskSvc: Update database
+    TaskSvc->>Kafka: Publish task.updated event (with diff)
+    TaskSvc-->>Frontend: 200 OK
+
+    Kafka->>EventConsumer: Consume task.updated event
+    EventConsumer->>WebSocket: Broadcast to user's clients
+    WebSocket-->>Frontend: Real-time update
+    Frontend-->>User: UI updates without refresh
+```
+
+---
+
+## Migration Strategy
+
+### Phase V Rollout Plan
+
+**Stage 1: Database Migrations (Week 1)**
+- Deploy migrations 001-008 to staging
+- Verify backward compatibility
+- Deploy to production during low-traffic window
+
+**Stage 2: Deploy New Services (Week 2)**
+- Deploy Recurrence Service (no traffic yet)
+- Deploy Reminder Service (no traffic yet)
+- Verify health checks and Dapr connectivity
+
+**Stage 3: Enable Features Gradually (Week 3)**
+- Enable priorities and tags (low risk)
+- Enable full-text search
+- Monitor performance and Kafka throughput
+
+**Stage 4: Enable Recurring Tasks (Week 4)**
+- Enable recurrence pattern creation
+- Monitor Cron trigger processing
+- Verify event publishing
+
+**Stage 5: Enable Reminders (Week 5)**
+- Enable reminder scheduling
+- Verify notifications working
+- Monitor Kafka lag
+
+**Stage 6: Full Rollout (Week 6)**
+- All features enabled for all users
+- Monitor metrics and alerts
+- Optimize based on production data
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+```python
+# backend/tests/test_recurrence_processor.py
+import pytest
+from datetime import datetime, timedelta
+from src.recurrence.processor import RecurrenceProcessor
+
+@pytest.mark.asyncio
+async def test_daily_recurrence_spawning(db_session, event_publisher):
+    processor = RecurrenceProcessor(db_session, event_publisher)
+
+    # Create daily recurrence pattern
+    pattern = RecurrencePattern(
+        task_id=1,
+        user_id="user123",
+        frequency="daily",
+        interval=1,
+        next_occurrence=datetime.utcnow() - timedelta(minutes=5)
+    )
+    db_session.add(pattern)
+    await db_session.commit()
+
+    # Process recurrences
+    spawned = await processor.process_due_recurrences()
+
+    assert spawned == 1
+    assert pattern.occurrences_count == 1
+    assert pattern.next_occurrence > datetime.utcnow()
+```
+
+### Integration Tests
+
+```python
+# backend/tests/integration/test_event_publishing.py
+import pytest
+from testcontainers.kafka import KafkaContainer
+
+@pytest.mark.integration
+async def test_task_creation_publishes_event():
+    with KafkaContainer() as kafka:
+        # Configure Dapr to use test Kafka
+        # Create task via API
+        response = await client.post("/api/todos", json={
+            "title": "Test task",
+            "priority": "high"
+        })
+
+        # Consume event from Kafka
+        consumer = kafka.get_consumer("task-events")
+        event = next(consumer)
+
+        assert event["event_type"] == "task.created"
+        assert event["data"]["priority"] == "high"
+```
+
+### E2E Tests
+
+```typescript
+// frontend/tests/e2e/recurring-tasks.spec.ts
+import { test, expect } from '@playwright/test';
+
+test('create recurring task and verify spawning', async ({ page }) => {
+  await page.goto('/todos');
+
+  // Create recurring task
+  await page.click('button:has-text("Add Task")');
+  await page.fill('input[name="title"]', 'Weekly meeting');
+  await page.check('input[name="recurring"]');
+  await page.selectOption('select[name="frequency"]', 'weekly');
+  await page.click('button:has-text("Save")');
+
+  // Verify task created
+  await expect(page.locator('text=Weekly meeting')).toBeVisible();
+  await expect(page.locator('text=Recurs weekly')).toBeVisible();
+
+  // Wait for next occurrence (in test, mock cron to run immediately)
+  await page.waitForTimeout(2000);
+
+  // Verify new instance spawned
+  const taskCount = await page.locator('text=Weekly meeting').count();
+  expect(taskCount).toBe(2);
+});
+```
+
+---
+
+## Monitoring and Observability
+
+### Key Metrics
+
+```yaml
+# Prometheus metrics exposed by all services
+metrics:
+  - name: http_requests_total
+    type: counter
+    labels: [method, endpoint, status]
+
+  - name: http_request_duration_seconds
+    type: histogram
+    labels: [method, endpoint]
+
+  - name: kafka_messages_published_total
+    type: counter
+    labels: [topic, event_type]
+
+  - name: kafka_publish_errors_total
+    type: counter
+    labels: [topic, error_type]
+
+  - name: recurrence_patterns_processed_total
+    type: counter
+
+  - name: reminders_sent_total
+    type: counter
+
+  - name: database_query_duration_seconds
+    type: histogram
+    labels: [query_type]
+```
+
+### Grafana Dashboards
+
+```yaml
+# Dashboard: Task Service Overview
+panels:
+  - title: "Request Rate"
+    query: "rate(http_requests_total{service='task-service'}[5m])"
+
+  - title: "Request Latency (P95)"
+    query: "histogram_quantile(0.95, http_request_duration_seconds{service='task-service'})"
+
+  - title: "Kafka Event Throughput"
+    query: "rate(kafka_messages_published_total[5m])"
+
+  - title: "Database Query Latency"
+    query: "histogram_quantile(0.95, database_query_duration_seconds)"
+```
+
+---
+
+## Rollback Plan
+
+In case of critical issues:
+
+1. **Immediate Rollback:**
+   ```bash
+   helm rollback todoapp -n production
+   ```
+
+2. **Feature Flags:** Disable specific features via ConfigMap:
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: feature-flags
+   data:
+     enable_recurring_tasks: "false"
+     enable_reminders: "false"
+   ```
+
+3. **Database Rollback:** Alembic downgrade:
+   ```bash
+   alembic downgrade -1  # Rollback last migration
+   ```
+
+---
+
+## Success Criteria
+
+Phase V implementation is complete when:
+
+- ✅ All 16 requirements implemented and tested
+- ✅ All 8 database migrations deployed successfully
+- ✅ All 5 services deployed with Dapr sidecars
+- ✅ Kafka cluster operational with 3 topics
+- ✅ Unit test coverage > 80%
+- ✅ Integration tests passing (Kafka, Dapr)
+- ✅ E2E tests passing (Playwright)
+- ✅ Load tests: 1,000 concurrent users, P95 latency < 100ms
+- ✅ CI/CD pipeline deploying to staging and production
+- ✅ Monitoring dashboards operational
+- ✅ Documentation complete (API docs, architecture diagrams)
+
+---
+
+## Next: Create Tasks
+
+Now that the plan is complete, the next step is to break down this implementation into atomic, testable tasks in `speckit.tasks`.
+
+---
+
+**Version History:**
+
+- v1.0 (2026-01-06): Initial implementation plan for Phase V
+- 9 components defined
+- 4 sequence diagrams created
+- Migration strategy outlined

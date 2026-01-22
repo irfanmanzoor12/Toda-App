@@ -1,0 +1,90 @@
+{{/*
+TASK-075: Helm template helpers for TodoApp
+*/}}
+
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "todoapp.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+*/}}
+{{- define "todoapp.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "todoapp.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "todoapp.labels" -}}
+helm.sh/chart: {{ include "todoapp.chart" . }}
+{{ include "todoapp.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "todoapp.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "todoapp.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Create the name of the service account to use
+*/}}
+{{- define "todoapp.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "todoapp.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Image name helper
+*/}}
+{{- define "todoapp.image" -}}
+{{- $registry := .global.imageRegistry | default "" -}}
+{{- $repository := .service.image.repository -}}
+{{- $tag := .service.image.tag | default "latest" -}}
+{{- if $registry -}}
+{{- printf "%s/%s:%s" $registry $repository $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $repository $tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Dapr annotations helper
+*/}}
+{{- define "todoapp.daprAnnotations" -}}
+{{- if .dapr.enabled }}
+dapr.io/enabled: "true"
+dapr.io/app-id: {{ .dapr.appId | quote }}
+dapr.io/app-port: {{ .dapr.appPort | quote }}
+dapr.io/enable-api-logging: "true"
+{{- end }}
+{{- end }}

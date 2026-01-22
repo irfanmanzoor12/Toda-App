@@ -1,0 +1,516 @@
+# Phase V Constitution - TodoApp Advanced Cloud Deployment
+
+version: "1.0"
+phase: "Phase V - Advanced Cloud Deployment"
+created: "2026-01-06"
+status: "active"
+
+---
+
+## Architectural Principles
+
+principles:
+  - principle_id: ARCH-001
+    title: "Event-Driven Architecture"
+    description: "All task state changes must emit events to Kafka for distributed processing"
+    rationale: "Enables real-time updates, audit trails, and loosely coupled services"
+    enforcement: "All task CRUD operations MUST call event publisher before returning"
+    exceptions: "None"
+
+  - principle_id: ARCH-002
+    title: "Stateless Services"
+    description: "No in-memory state retention; use Dapr State Store or PostgreSQL"
+    rationale: "Enables horizontal scaling and fault tolerance in Kubernetes"
+    enforcement: "All services must pass stateless test (kill pod, verify recovery)"
+    exceptions: "Caching with TTL < 5 minutes allowed"
+
+  - principle_id: ARCH-003
+    title: "Dapr-First Integration"
+    description: "Use Dapr building blocks instead of direct SDK calls"
+    rationale: "Abstraction enables portability and simplifies configuration"
+    enforcement: "No direct Kafka SDK, Redis SDK, or Azure SDK calls in application code"
+    exceptions: "Dapr SDK for invoking Dapr APIs is allowed"
+
+  - principle_id: ARCH-004
+    title: "Microservices Boundaries"
+    description: "Each service owns its domain and database schema"
+    rationale: "Prevents tight coupling and enables independent deployment"
+    enforcement: "Services communicate via Dapr service invocation or Kafka events only"
+    exceptions: "Shared authentication database (Better Auth)"
+
+  - principle_id: ARCH-005
+    title: "API-First Design"
+    description: "OpenAPI schema defined before implementation"
+    rationale: "Enables contract testing and prevents API drift"
+    enforcement: "All new endpoints must have OpenAPI schema in speckit.plan"
+    exceptions: "Internal health check endpoints"
+
+---
+
+## Technology Stack Constraints
+
+stack:
+  backend:
+    language: "Python 3.11+"
+    framework: "FastAPI 0.104+"
+    orm: "SQLAlchemy 2.0+"
+    migrations: "Alembic"
+    testing: "pytest + pytest-asyncio"
+
+  database:
+    primary: "PostgreSQL 15+"
+    production: "Neon PostgreSQL (serverless)"
+    local: "PostgreSQL in Docker"
+
+  event_streaming:
+    platform: "Apache Kafka 3.5+"
+    kubernetes: "Strimzi Operator"
+    local: "Kafka in Docker"
+    topics:
+      - "task-events"      # Task CRUD events
+      - "reminders"        # Scheduled reminder triggers
+      - "task-updates"     # Real-time UI sync
+
+  distributed_runtime:
+    platform: "Dapr 1.12+"
+    components:
+      - "Pub/Sub (Kafka)"
+      - "State Store (Redis)"
+      - "Bindings (Cron, Kafka)"
+      - "Secrets (Kubernetes secrets)"
+      - "Service Invocation (HTTP/gRPC)"
+
+  frontend:
+    framework: "Next.js 14+ (App Router)"
+    ui_library: "React 18+"
+    auth: "Better Auth"
+    state: "React Context + SWR"
+
+  deployment:
+    local: "Minikube + Dapr + Kafka (Strimzi)"
+    cloud: "AKS / GKE / OKE + Dapr + Managed Kafka"
+    ci_cd: "GitHub Actions"
+    iac: "Helm charts"
+
+---
+
+## Service Architecture
+
+services:
+  - service_id: SVC-001
+    name: "Task Service"
+    port: 8001
+    responsibilities:
+      - "Task CRUD operations"
+      - "User-scoped task queries"
+      - "Event publishing to Kafka"
+    technologies:
+      - "FastAPI"
+      - "PostgreSQL"
+      - "Dapr Pub/Sub"
+    endpoints:
+      - "GET /api/todos"
+      - "POST /api/todos"
+      - "PUT /api/todos/{id}"
+      - "DELETE /api/todos/{id}"
+      - "GET /api/health"
+
+  - service_id: SVC-002
+    name: "Recurrence Service"
+    port: 8002
+    responsibilities:
+      - "Calculate next occurrence dates"
+      - "Spawn new task instances"
+      - "Manage recurrence patterns"
+    technologies:
+      - "FastAPI"
+      - "PostgreSQL"
+      - "Dapr Bindings (Cron)"
+      - "Dapr Pub/Sub (Kafka)"
+    endpoints:
+      - "POST /api/recurrence/patterns"
+      - "GET /api/recurrence/patterns/{id}"
+      - "POST /api/recurrence/process"  # Triggered by Dapr Cron
+
+  - service_id: SVC-003
+    name: "Reminder Service"
+    port: 8003
+    responsibilities:
+      - "Monitor due dates"
+      - "Send reminder notifications"
+      - "Manage reminder schedules"
+    technologies:
+      - "FastAPI"
+      - "Dapr Bindings (Cron)"
+      - "Dapr Pub/Sub (Kafka)"
+    endpoints:
+      - "POST /api/reminders/schedule"
+      - "POST /api/reminders/process"  # Triggered by Dapr Cron
+
+  - service_id: SVC-004
+    name: "Chat Service"
+    port: 3002
+    responsibilities:
+      - "AI agent conversation handling"
+      - "MCP tool orchestration"
+      - "Conversation persistence"
+    technologies:
+      - "Node.js + Express"
+      - "OpenAI Agents SDK"
+      - "MCP SDK"
+      - "Dapr Service Invocation"
+    endpoints:
+      - "POST /api/chat"
+      - "GET /api/conversations/{id}"
+
+  - service_id: SVC-005
+    name: "MCP HTTP Server"
+    port: 3003
+    responsibilities:
+      - "Expose MCP tools as HTTP endpoints"
+      - "Call backend services via Dapr"
+      - "Maintain stateless operation"
+    technologies:
+      - "Node.js + Express"
+      - "MCP SDK"
+      - "Dapr Service Invocation"
+    tools:
+      - "add_task"
+      - "add_recurring_task"
+      - "list_tasks"
+      - "complete_task"
+      - "delete_task"
+      - "update_task"
+      - "set_due_date"
+      - "search_tasks"
+      - "add_tags"
+      - "set_priority"
+
+---
+
+## Database Schema Principles
+
+database:
+  - principle_id: DB-001
+    title: "User-Scoped Data"
+    description: "All user data tables must have user_id foreign key"
+    enforcement: "Every SELECT/UPDATE/DELETE must filter by user_id"
+
+  - principle_id: DB-002
+    title: "Alembic Migrations"
+    description: "All schema changes via Alembic migrations"
+    enforcement: "No manual ALTER TABLE commands in production"
+
+  - principle_id: DB-003
+    title: "Soft Deletes"
+    description: "Use deleted_at timestamp instead of hard deletes"
+    rationale: "Enables data recovery and audit trails"
+
+  - principle_id: DB-004
+    title: "Event Sourcing"
+    description: "Maintain task_events table for complete history"
+    rationale: "Enables debugging, analytics, and event replay"
+
+---
+
+## Event Schema Standards
+
+events:
+  - event_type: "task.created"
+    topic: "task-events"
+    schema:
+      task_id: "integer"
+      user_id: "string"
+      title: "string"
+      description: "string (optional)"
+      priority: "enum (low, medium, high)"
+      tags: "array of strings"
+      created_at: "ISO 8601 timestamp"
+
+  - event_type: "task.updated"
+    topic: "task-events"
+    schema:
+      task_id: "integer"
+      user_id: "string"
+      changes: "object (field: old_value -> new_value)"
+      updated_at: "ISO 8601 timestamp"
+
+  - event_type: "task.completed"
+    topic: "task-events"
+    schema:
+      task_id: "integer"
+      user_id: "string"
+      completed_at: "ISO 8601 timestamp"
+
+  - event_type: "task.deleted"
+    topic: "task-events"
+    schema:
+      task_id: "integer"
+      user_id: "string"
+      deleted_at: "ISO 8601 timestamp"
+
+  - event_type: "reminder.triggered"
+    topic: "reminders"
+    schema:
+      task_id: "integer"
+      user_id: "string"
+      due_date: "ISO 8601 timestamp"
+      notification_type: "enum (email, push, in-app)"
+
+---
+
+## Testing Requirements
+
+testing:
+  - requirement_id: TEST-001
+    title: "Unit Test Coverage"
+    target: "> 80% code coverage"
+    tools: "pytest + pytest-cov"
+    enforcement: "CI pipeline fails if coverage < 80%"
+
+  - requirement_id: TEST-002
+    title: "Integration Tests with Dapr"
+    description: "Test all Dapr components with testcontainers"
+    tools: "pytest + testcontainers + dapr"
+    examples:
+      - "Pub/Sub message delivery"
+      - "State Store persistence"
+      - "Service invocation"
+
+  - requirement_id: TEST-003
+    title: "E2E Tests"
+    description: "Test full user flows in browser"
+    tools: "Playwright"
+    critical_flows:
+      - "Create recurring task"
+      - "Set due date and receive reminder"
+      - "Search and filter tasks"
+      - "Chat creates and updates tasks"
+
+  - requirement_id: TEST-004
+    title: "Load Testing"
+    description: "Verify Kafka throughput and latency"
+    tools: "k6"
+    targets:
+      - "1000 tasks/second event publishing"
+      - "P95 latency < 100ms"
+
+  - requirement_id: TEST-005
+    title: "Chaos Testing"
+    description: "Verify fault tolerance"
+    scenarios:
+      - "Kill random pod, verify recovery"
+      - "Kafka broker down, verify buffering"
+      - "Database connection loss, verify retry"
+
+---
+
+## Security Standards
+
+security:
+  - requirement_id: SEC-001
+    title: "JWT Authentication"
+    description: "All API endpoints require valid JWT token"
+    enforcement: "FastAPI Depends(verify_token) on all routes"
+    exceptions: "/health and /metrics endpoints"
+
+  - requirement_id: SEC-002
+    title: "User Isolation"
+    description: "Users can only access their own data"
+    enforcement: "All queries filter by user_id from JWT"
+
+  - requirement_id: SEC-003
+    title: "Secrets Management"
+    description: "No secrets in code or environment variables"
+    enforcement: "All secrets in Dapr secret store"
+    examples:
+      - "DATABASE_URL"
+      - "OPENAI_API_KEY"
+      - "KAFKA_CREDENTIALS"
+
+  - requirement_id: SEC-004
+    title: "TLS Everywhere"
+    description: "Encrypt all communication"
+    enforcement:
+      - "HTTPS for frontend"
+      - "TLS for Kafka"
+      - "mTLS for Dapr service invocation"
+
+  - requirement_id: SEC-005
+    title: "Input Validation"
+    description: "Validate and sanitize all user input"
+    enforcement: "Pydantic models for all API inputs"
+
+---
+
+## Performance Expectations
+
+performance:
+  - metric: "API Response Time"
+    target: "P95 < 100ms"
+    measurement: "Prometheus + Grafana"
+
+  - metric: "Kafka Event Latency"
+    target: "End-to-end < 50ms"
+    measurement: "k6 load tests"
+
+  - metric: "Frontend Load Time"
+    target: "LCP < 2.5s"
+    measurement: "Lighthouse CI"
+
+  - metric: "Database Query Time"
+    target: "P95 < 50ms"
+    measurement: "PostgreSQL slow query log"
+
+---
+
+## Deployment Standards
+
+deployment:
+  - requirement_id: DEPLOY-001
+    title: "Health Checks"
+    description: "All services expose /health endpoint"
+    kubernetes:
+      livenessProbe: "/health"
+      readinessProbe: "/ready"
+
+  - requirement_id: DEPLOY-002
+    title: "Resource Limits"
+    description: "Define CPU and memory limits"
+    kubernetes:
+      requests: "cpu: 100m, memory: 128Mi"
+      limits: "cpu: 500m, memory: 512Mi"
+
+  - requirement_id: DEPLOY-003
+    title: "Horizontal Scaling"
+    description: "Services scale based on CPU/memory"
+    kubernetes:
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+
+  - requirement_id: DEPLOY-004
+    title: "Rolling Updates"
+    description: "Zero-downtime deployments"
+    kubernetes:
+      strategy: "RollingUpdate"
+      maxSurge: 1
+      maxUnavailable: 0
+
+  - requirement_id: DEPLOY-005
+    title: "Configuration Management"
+    description: "Externalize all configuration"
+    kubernetes:
+      - "ConfigMaps for app config"
+      - "Secrets for credentials"
+      - "Dapr components for infrastructure"
+
+---
+
+## Monitoring and Observability
+
+observability:
+  - requirement_id: OBS-001
+    title: "Structured Logging"
+    description: "JSON logs with correlation IDs"
+    fields:
+      - "timestamp"
+      - "level"
+      - "service_name"
+      - "trace_id"
+      - "user_id"
+      - "message"
+
+  - requirement_id: OBS-002
+    title: "Distributed Tracing"
+    description: "OpenTelemetry traces for all requests"
+    tools: "Jaeger or Zipkin"
+
+  - requirement_id: OBS-003
+    title: "Metrics Collection"
+    description: "Prometheus metrics for all services"
+    metrics:
+      - "request_count"
+      - "request_duration_seconds"
+      - "kafka_messages_published"
+      - "database_queries_total"
+
+  - requirement_id: OBS-004
+    title: "Alerting"
+    description: "Alerts for critical failures"
+    alerts:
+      - "Service down > 5 minutes"
+      - "Error rate > 5%"
+      - "Kafka lag > 1000 messages"
+
+---
+
+## CI/CD Pipeline
+
+ci_cd:
+  - stage: "Build"
+    steps:
+      - "Run unit tests"
+      - "Check code coverage (>80%)"
+      - "Build Docker images"
+      - "Scan for vulnerabilities"
+
+  - stage: "Test"
+    steps:
+      - "Deploy to test environment"
+      - "Run integration tests"
+      - "Run E2E tests"
+      - "Run load tests"
+
+  - stage: "Deploy Staging"
+    steps:
+      - "Deploy to staging cluster"
+      - "Run smoke tests"
+      - "Manual approval gate"
+
+  - stage: "Deploy Production"
+    steps:
+      - "Deploy to production cluster"
+      - "Run health checks"
+      - "Monitor for 15 minutes"
+      - "Automatic rollback if errors"
+
+---
+
+## Breaking Glass Procedures
+
+emergency:
+  - scenario: "Production Database Down"
+    steps:
+      - "Switch to read-only mode"
+      - "Serve cached data from Redis"
+      - "Alert on-call engineer"
+      - "Failover to backup database"
+
+  - scenario: "Kafka Broker Down"
+    steps:
+      - "Events buffered in Dapr outbox"
+      - "Increase retry timeout"
+      - "Alert on-call engineer"
+      - "Manual replay if needed"
+
+  - scenario: "Runaway Task Creation"
+    steps:
+      - "Enable rate limiting"
+      - "Identify source user_id"
+      - "Suspend user account"
+      - "Clean up spam tasks"
+
+---
+
+## Version History
+
+- v1.0 (2026-01-06): Initial constitution for Phase V
+- Focus: Event-driven architecture with Dapr + Kafka + Kubernetes
+- Stack: FastAPI + Next.js + PostgreSQL + Kafka + Dapr
+
+---
+
+**This constitution is binding for all development in Phase V.**
+
+Any deviation requires approval and documentation of rationale.

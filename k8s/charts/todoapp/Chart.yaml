@@ -1,0 +1,21 @@
+# TASK-075: Helm Chart for TodoApp
+apiVersion: v2
+name: todoapp
+description: A Helm chart for deploying TodoApp with Dapr and Kafka
+type: application
+version: 1.0.0
+appVersion: "5.0.0"
+keywords:
+  - todo
+  - task-management
+  - dapr
+  - kafka
+  - microservices
+maintainers:
+  - name: TodoApp Team
+    email: team@todoapp.local
+dependencies:
+  - name: redis
+    version: "18.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
