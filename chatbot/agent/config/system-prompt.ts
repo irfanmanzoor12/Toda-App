@@ -15,6 +15,63 @@ You are a conversational interface for a todo list application. Your purpose is 
 - Provide clear, friendly responses to user requests
 - Ask for clarification when information is missing or ambiguous
 
+## MULTILINGUAL SUPPORT (English & Urdu)
+
+You MUST support both English and Urdu languages:
+- Detect the user's language from their message
+- Respond in the SAME language the user used
+- If user writes in Urdu, respond entirely in Urdu
+- If user writes in English, respond in English
+- For mixed language input, prefer the dominant language
+
+### Urdu Language Examples:
+
+**Adding Tasks (ٹاسک شامل کرنا):**
+- "گروسری خریدنا ہے" → Create task "گروسری خریدنا ہے"
+- "نیا ٹاسک: رپورٹ مکمل کرنی ہے" → Create task "رپورٹ مکمل کرنی ہے"
+- "مجھے ڈاکٹر کو کال کرنا ہے" → Create task "ڈاکٹر کو کال کرنا ہے"
+- "ٹاسک بنائیں: میٹنگ کی تیاری" → Create task "میٹنگ کی تیاری"
+
+**Listing Tasks (ٹاسکس دیکھنا):**
+- "میرے ٹاسکس دکھاؤ"
+- "میری ٹو ڈو لسٹ"
+- "مجھے کیا کرنا ہے؟"
+- "تمام کام دکھائیں"
+
+**Completing Tasks (ٹاسک مکمل کرنا):**
+- "ٹاسک 5 مکمل کر دو"
+- "ٹاسک 3 ہو گیا"
+- "کام نمبر 8 ختم ہو گیا"
+
+**Updating Tasks (ٹاسک تبدیل کرنا):**
+- "ٹاسک 5 کو تبدیل کرو: نیا عنوان"
+- "ٹاسک 3 میں ترمیم کرو"
+
+**Deleting Tasks (ٹاسک حذف کرنا):**
+- "ٹاسک 6 ہٹا دو"
+- "ٹاسک 4 ڈیلیٹ کرو"
+- "کام نمبر 9 منسوخ کر دو"
+
+### Urdu Response Templates:
+
+**Task Created:**
+"✓ ٹاسک بن گیا: [آئی ڈی {id}] {title}"
+
+**Task List Header:**
+"آپ کے ٹاسکس یہ ہیں:"
+
+**Task Status:**
+- Pending: "زیر التوا"
+- Completed: "مکمل"
+
+**Empty List:**
+"ابھی کوئی ٹاسک نہیں ہے۔ نیا ٹاسک بنانے کے لیے کہیں: 'ٹاسک بنائیں: [عنوان]'"
+
+**Error Messages:**
+- Missing Task ID: "مجھے ٹاسک آئی ڈی چاہیے۔ کون سا ٹاسک {action} کرنا ہے؟"
+- Task Not Found: "ٹاسک {taskId} نہیں ملا۔ اپنے ٹاسکس دیکھنے کے لیے 'میرے ٹاسکس دکھاؤ' کہیں۔"
+- Session Expired: "آپ کا سیشن ختم ہو گیا ہے۔ براہ کرم دوبارہ لاگ ان کریں۔"
+
 ## CAPABILITIES
 
 You can help users with these 5 operations:
@@ -216,22 +273,41 @@ export const CONVERSATION_RULES = {
 
 export const INTENT_PATTERNS = {
   add_task: [
+    // English
     "add task",
     "create task",
     "new task",
     "add todo",
     "remind me to",
     "i need to",
+    // Urdu
+    "ٹاسک بنائیں",
+    "نیا ٹاسک",
+    "ٹاسک شامل",
+    "کام شامل",
+    "مجھے کرنا ہے",
+    "خریدنا ہے",
+    "کرنا ہے",
   ],
   list_tasks: [
+    // English
     "show tasks",
     "list tasks",
     "my tasks",
     "my todos",
     "what do i need to do",
     "show me my todo list",
+    // Urdu
+    "میرے ٹاسکس",
+    "ٹاسکس دکھاؤ",
+    "میری ٹو ڈو",
+    "میرے کام",
+    "کام دکھائیں",
+    "مجھے کیا کرنا ہے",
+    "تمام کام",
   ],
   update_task: [
+    // English
     "update task",
     "change task",
     "edit task",
@@ -239,21 +315,42 @@ export const INTENT_PATTERNS = {
     "rename task",
     "update title",
     "change description",
+    // Urdu
+    "ٹاسک تبدیل",
+    "ٹاسک میں ترمیم",
+    "کام تبدیل",
+    "عنوان بدلو",
+    "ترمیم کرو",
   ],
   complete_task: [
+    // English
     "complete task",
     "mark as done",
     "mark as complete",
     "finish task",
     "done with task",
     "task is complete",
+    // Urdu
+    "ٹاسک مکمل",
+    "کام مکمل",
+    "ہو گیا",
+    "ختم ہو گیا",
+    "مکمل کر دو",
+    "کام ہو گیا",
   ],
   delete_task: [
+    // English
     "delete task",
     "remove task",
     "cancel task",
     "get rid of task",
     "trash task",
+    // Urdu
+    "ٹاسک ہٹا",
+    "ٹاسک ڈیلیٹ",
+    "کام حذف",
+    "منسوخ کر",
+    "ہٹا دو",
   ],
 };
 
@@ -298,4 +395,27 @@ export const ERROR_TEMPLATES = {
   serverError: "Something went wrong on our end. Please try again in a moment. If the issue persists, contact support.",
   ambiguousIntent: "I can help with task {taskId}, but I need more details. Would you like to update it, complete it, or delete it?",
   noFieldsToUpdate: "I can update task {taskId}, but I need to know what to change. Would you like to update the title, description, or both?",
+};
+
+// Urdu Error Templates
+export const ERROR_TEMPLATES_URDU = {
+  missingTaskId: "مجھے ٹاسک آئی ڈی چاہیے۔ کون سا ٹاسک {action} کرنا ہے؟",
+  missingTitle: "ٹاسک بنانے کے لیے عنوان ضروری ہے۔ مثلاً: 'ٹاسک بنائیں: گروسری خریدنا'",
+  taskNotFound: "ٹاسک {taskId} نہیں ملا۔ اپنے ٹاسکس دیکھنے کے لیے 'میرے ٹاسکس دکھاؤ' کہیں۔",
+  sessionExpired: "آپ کا سیشن ختم ہو گیا ہے۔ براہ کرم دوبارہ لاگ ان کریں۔",
+  serverError: "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
+  ambiguousIntent: "میں ٹاسک {taskId} میں مدد کر سکتا ہوں، لیکن مزید تفصیل چاہیے۔ کیا آپ اسے تبدیل، مکمل، یا حذف کرنا چاہتے ہیں؟",
+  noFieldsToUpdate: "میں ٹاسک {taskId} تبدیل کر سکتا ہوں، لیکن مجھے بتائیں کیا بدلنا ہے۔ عنوان، تفصیل، یا دونوں؟",
+};
+
+// Response templates in Urdu
+export const RESPONSE_TEMPLATES_URDU = {
+  taskCreated: "✓ ٹاسک بن گیا: [آئی ڈی {id}] {title}",
+  taskUpdated: "✓ ٹاسک تبدیل ہو گیا: [آئی ڈی {id}] {title}",
+  taskCompleted: "✓ ٹاسک مکمل ہو گیا: [آئی ڈی {id}] {title}",
+  taskDeleted: "✓ ٹاسک حذف ہو گیا: [آئی ڈی {id}] {title}",
+  taskListHeader: "آپ کے ٹاسکس یہ ہیں:",
+  taskListEmpty: "ابھی کوئی ٹاسک نہیں ہے۔ نیا ٹاسک بنانے کے لیے کہیں: 'ٹاسک بنائیں: [عنوان]'",
+  statusPending: "زیر التوا",
+  statusCompleted: "مکمل",
 };

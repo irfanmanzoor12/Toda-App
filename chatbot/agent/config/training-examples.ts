@@ -405,7 +405,171 @@ export const EDGE_CASE_EXAMPLES: TrainingExample[] = [
 ];
 
 /**
- * All training examples combined
+ * Urdu Language Training Examples
+ * Supports multilingual chatbot functionality (+100 bonus points)
+ */
+export const URDU_ADD_TASK_EXAMPLES: TrainingExample[] = [
+  {
+    input: "گروسری خریدنا ہے",
+    intent: "add_task",
+    parameters: { title: "گروسری خریدنا ہے" },
+    description: "Urdu: Simple task in conversational form",
+  },
+  {
+    input: "نیا ٹاسک: رپورٹ مکمل کرنی ہے",
+    intent: "add_task",
+    parameters: { title: "رپورٹ مکمل کرنی ہے" },
+    description: "Urdu: 'New task' with colon separator",
+  },
+  {
+    input: "مجھے ڈاکٹر کو کال کرنا ہے",
+    intent: "add_task",
+    parameters: { title: "ڈاکٹر کو کال کرنا ہے" },
+    description: "Urdu: 'I need to' form",
+  },
+  {
+    input: "ٹاسک بنائیں: میٹنگ کی تیاری",
+    intent: "add_task",
+    parameters: { title: "میٹنگ کی تیاری" },
+    description: "Urdu: 'Create task' with colon",
+  },
+  {
+    input: "کام شامل کرو: پریزنٹیشن بنانی ہے",
+    intent: "add_task",
+    parameters: { title: "پریزنٹیشن بنانی ہے" },
+    description: "Urdu: 'Add work' variant",
+  },
+];
+
+export const URDU_LIST_TASKS_EXAMPLES: TrainingExample[] = [
+  {
+    input: "میرے ٹاسکس دکھاؤ",
+    intent: "list_tasks",
+    description: "Urdu: 'Show my tasks'",
+  },
+  {
+    input: "میری ٹو ڈو لسٹ",
+    intent: "list_tasks",
+    description: "Urdu: 'My todo list'",
+  },
+  {
+    input: "مجھے کیا کرنا ہے؟",
+    intent: "list_tasks",
+    description: "Urdu: 'What do I need to do?'",
+  },
+  {
+    input: "تمام کام دکھائیں",
+    intent: "list_tasks",
+    description: "Urdu: 'Show all work'",
+  },
+  {
+    input: "میرے کام کیا ہیں",
+    intent: "list_tasks",
+    description: "Urdu: 'What are my tasks'",
+  },
+];
+
+export const URDU_COMPLETE_TASK_EXAMPLES: TrainingExample[] = [
+  {
+    input: "ٹاسک 5 مکمل کر دو",
+    intent: "complete_task",
+    parameters: { task_id: 5 },
+    description: "Urdu: 'Complete task 5'",
+  },
+  {
+    input: "ٹاسک 3 ہو گیا",
+    intent: "complete_task",
+    parameters: { task_id: 3 },
+    description: "Urdu: 'Task 3 is done'",
+  },
+  {
+    input: "کام نمبر 8 ختم ہو گیا",
+    intent: "complete_task",
+    parameters: { task_id: 8 },
+    description: "Urdu: 'Work number 8 is finished'",
+  },
+  {
+    input: "ٹاسک 2 مکمل",
+    intent: "complete_task",
+    parameters: { task_id: 2 },
+    description: "Urdu: Minimal 'task 2 complete'",
+  },
+  {
+    input: "میں نے ٹاسک 10 ختم کر دیا",
+    intent: "complete_task",
+    parameters: { task_id: 10 },
+    description: "Urdu: 'I finished task 10'",
+  },
+];
+
+export const URDU_UPDATE_TASK_EXAMPLES: TrainingExample[] = [
+  {
+    input: "ٹاسک 5 کو تبدیل کرو: گروسری کی خریداری",
+    intent: "update_task",
+    parameters: { task_id: 5, title: "گروسری کی خریداری" },
+    description: "Urdu: 'Change task 5' with new title",
+  },
+  {
+    input: "ٹاسک 3 میں ترمیم کرو",
+    intent: "update_task",
+    parameters: { task_id: 3 },
+    description: "Urdu: 'Edit task 3' (needs clarification)",
+  },
+  {
+    input: "کام 7 کا عنوان بدلو: نئی میٹنگ",
+    intent: "update_task",
+    parameters: { task_id: 7, title: "نئی میٹنگ" },
+    description: "Urdu: 'Change title of work 7'",
+  },
+  {
+    input: "ٹاسک 4 کی تفصیل تبدیل کرو: فوری کرنا ہے",
+    intent: "update_task",
+    parameters: { task_id: 4, description: "فوری کرنا ہے" },
+    description: "Urdu: 'Change description of task 4'",
+  },
+  {
+    input: "ٹاسک 9 اپڈیٹ کرو: کوڈ ریویو",
+    intent: "update_task",
+    parameters: { task_id: 9, title: "کوڈ ریویو" },
+    description: "Urdu: 'Update task 9'",
+  },
+];
+
+export const URDU_DELETE_TASK_EXAMPLES: TrainingExample[] = [
+  {
+    input: "ٹاسک 6 ہٹا دو",
+    intent: "delete_task",
+    parameters: { task_id: 6 },
+    description: "Urdu: 'Remove task 6'",
+  },
+  {
+    input: "ٹاسک 4 ڈیلیٹ کرو",
+    intent: "delete_task",
+    parameters: { task_id: 4 },
+    description: "Urdu: 'Delete task 4'",
+  },
+  {
+    input: "کام نمبر 9 منسوخ کر دو",
+    intent: "delete_task",
+    parameters: { task_id: 9 },
+    description: "Urdu: 'Cancel work number 9'",
+  },
+  {
+    input: "ٹاسک 3 حذف کرو",
+    intent: "delete_task",
+    parameters: { task_id: 3 },
+    description: "Urdu: 'Delete task 3' using 'حذف'",
+  },
+  {
+    input: "مجھے ٹاسک 7 نہیں چاہیے",
+    intent: "delete_task",
+    parameters: { task_id: 7 },
+    description: "Urdu: 'I don't need task 7'",
+  },
+];
+
+/**
+ * All training examples combined (including Urdu)
  */
 export const ALL_TRAINING_EXAMPLES: TrainingExample[] = [
   ...ADD_TASK_EXAMPLES,
@@ -414,6 +578,12 @@ export const ALL_TRAINING_EXAMPLES: TrainingExample[] = [
   ...COMPLETE_TASK_EXAMPLES,
   ...DELETE_TASK_EXAMPLES,
   ...EDGE_CASE_EXAMPLES,
+  // Urdu examples
+  ...URDU_ADD_TASK_EXAMPLES,
+  ...URDU_LIST_TASKS_EXAMPLES,
+  ...URDU_COMPLETE_TASK_EXAMPLES,
+  ...URDU_UPDATE_TASK_EXAMPLES,
+  ...URDU_DELETE_TASK_EXAMPLES,
 ];
 
 /**
