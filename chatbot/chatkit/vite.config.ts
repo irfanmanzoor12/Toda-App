@@ -7,7 +7,13 @@ export default defineConfig({
   server: {
     port: 3300,
     proxy: {
-      '/api': {
+      // Auth endpoints go to Next.js (Better Auth)
+      '/api/auth': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      // Chat endpoint goes to Agent API
+      '/api/chat': {
         target: 'http://localhost:3002',
         changeOrigin: true,
       }

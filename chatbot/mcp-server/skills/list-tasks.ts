@@ -53,13 +53,13 @@ export async function executeListTasks(
   const httpClient = createAuthenticatedClient(sessionToken);
 
   try {
-    // GET from /api/{user_id}/tasks (Phase II actual endpoint)
-    const response = await httpClient.get<Task[]>(`/api/${sessionToken}/tasks`);
+    // GET from /api/todos (Phase V endpoint - uses Authorization header for user)
+    const response = await httpClient.get<{ tasks: Task[] }>(`/api/todos`);
 
-    // Return tasks array
+    // Return tasks array from paginated response
     // Note: Empty array is a valid success response
     return {
-      tasks: response.data || [],
+      tasks: response.data?.tasks || [],
     };
   } catch (error: any) {
     // Handle HTTP errors

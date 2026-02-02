@@ -118,10 +118,9 @@ export async function executeAddTask(
       description: input.description || null,
     };
 
-    // POST to /api/{user_id}/tasks (Phase II actual endpoint)
-    // Note: user_id derived from session token by backend
+    // POST to /api/todos (Phase V endpoint - uses Authorization header for user)
     const response = await httpClient.post<AddTaskOutput>(
-      `/api/${sessionToken}/tasks`,
+      `/api/todos`,
       requestBody
     );
 
