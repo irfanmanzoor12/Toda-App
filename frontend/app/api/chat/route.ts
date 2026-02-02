@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * Chat API Proxy - Phase III
  *
  * Forwards chat requests to Python FastAPI backend with conversation persistence.
- * Backend: http://localhost:8001/api/{user_id}/chat
+ * Backend: http://localhost:8000/api/{user_id}/chat
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward to Python FastAPI backend (Phase III)
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/${user_id}/chat`, {
       method: 'POST',
       headers: {

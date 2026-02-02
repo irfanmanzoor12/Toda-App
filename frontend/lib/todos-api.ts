@@ -67,12 +67,24 @@ export async function createTodo(data: TodoCreate): Promise<Todo> {
 }
 
 /**
+ * Paginated response from API.
+ */
+interface PaginatedResponse<T> {
+  tasks: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
  * List all todos for the current user.
  */
 export async function listTodos(): Promise<Todo[]> {
-  return apiCall<Todo[]>('/api/todos', {
+  const response = await apiCall<PaginatedResponse<Todo>>('/api/todos', {
     method: 'GET',
   });
+  // API returns paginated response, extract the tasks array
+  return response.tasks || [];
 }
 
 /**

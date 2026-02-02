@@ -120,7 +120,8 @@ export default function TodosPage() {
     setSearchResults(null);
   };
 
-  const displayTodos = searchResults !== null ? searchResults : todos;
+  // Ensure displayTodos is always an array
+  const displayTodos = Array.isArray(searchResults) ? searchResults : (Array.isArray(todos) ? todos : []);
 
   if (isPending || !session) {
     return <div style={{ padding: "40px", textAlign: "center" }}>Loading...</div>;

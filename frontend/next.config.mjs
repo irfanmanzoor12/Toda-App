@@ -4,7 +4,12 @@ const nextConfig = {
     return [
       {
         source: "/backend/:path*",
-        destination: "http://127.0.0.1:8001/:path*",
+        destination: "http://127.0.0.1:8000/:path*",
+      },
+      // Direct API proxy for todos (Phase V compatibility)
+      {
+        source: "/api/todos/:path*",
+        destination: "http://127.0.0.1:8000/api/todos/:path*",
       },
       // Proxy all @vite resources (Vite HMR and modules) - @ needs to be escaped
       {
