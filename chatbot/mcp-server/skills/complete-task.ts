@@ -97,10 +97,9 @@ export async function executeCompleteTask(
   const httpClient = createAuthenticatedClient(sessionToken);
 
   try {
-    // PATCH to /api/{user_id}/tasks/{task_id}/complete
-    // sessionToken is used as user_id, backend resolves via JWT
+    // PATCH to /api/todos/{task_id}/complete (Phase V endpoint - uses Authorization header)
     const response = await httpClient.patch<CompleteTaskOutput>(
-      `/api/${sessionToken}/tasks/${input.task_id}/complete`,
+      `/api/todos/${input.task_id}/complete`,
       {}
     );
 

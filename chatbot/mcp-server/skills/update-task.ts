@@ -154,9 +154,9 @@ export async function executeUpdateTask(
       requestBody.description = input.description;
     }
 
-    // PUT to /api/{user_id}/tasks/{task_id} (Phase II actual endpoint)
+    // PUT to /api/todos/{task_id} (Phase V endpoint - uses Authorization header)
     const response = await httpClient.put<UpdateTaskOutput>(
-      `/api/${sessionToken}/tasks/${input.task_id}`,
+      `/api/todos/${input.task_id}`,
       requestBody
     );
 
