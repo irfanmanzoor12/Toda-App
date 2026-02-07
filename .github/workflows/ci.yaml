@@ -127,8 +127,8 @@ jobs:
             context: frontend
             dockerfile: frontend/Dockerfile
           - name: mcp-http-server
-            context: chatbot/mcp-http-server
-            dockerfile: chatbot/mcp-http-server/Dockerfile
+            context: chatbot
+            dockerfile: chatbot/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
