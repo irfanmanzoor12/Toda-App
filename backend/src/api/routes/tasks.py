@@ -319,17 +319,23 @@ async def update_task(
     return response
 
 
-@router.patch("/{user_id}/tasks/{task_id}/complete", response_model=Todo)
-def complete_task(
-    user_id: str,
+@router.patch("/todos/{task_id}/complete", response_model=TaskResponse)
+async def complete_task(
     task_id: int,
     deps: Tuple[Session, str] = Depends(get_user_session)
 ):
-    """Mark a task as complete. Returns 404 if not found or not owned by user."""
-    session, jwt_user_id = deps
+    """Mark a task as complete.
 
-    statement = select(Todo).where(Todo.id == task_id, Todo.user_id == jwt_user_id)
-    task = session.exec(statement).first()
+    TASK-015: Phase V complete endpoint
+    - Uses /api/todos/{task_id}/complete path (consistent with other Phase V endpoints)
+    - Publishes task.completed event to Kafka
+    - Returns 404 if not found or not owned by user
+    """
+    session, user_id = deps
+
+    task = session.exec(
+        select(Todo).where(Todo.id == task_id, Todo.user_id == user_id, Todo.deleted_at.is_(None))
+    ).first()
 
     if not task:
         raise HTTPException(
@@ -338,11 +344,32 @@ def complete_task(
         )
 
     task.completed = True
+    task.updated_at = datetime.now(timezone.utc)
 
     session.add(task)
     session.commit()
     session.refresh(task)
-    return task
+
+    # Publish event
+    try:
+        publisher = get_event_publisher()
+        await publisher.publish_task_updated(
+            task_id=task.id,
+            user_id=user_id,
+            changes={"completed": {"old": False, "new": True}}
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to publish task.completed event: {e}")
+
+    # Load tags for response
+    tags = session.exec(
+        select(Tag).join(TaskTag).where(TaskTag.task_id == task.id)
+    ).all()
+
+    response = TaskResponse.model_validate(task)
+    response.tags = tags
+    return response
 
 
 @router.delete("/todos/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
