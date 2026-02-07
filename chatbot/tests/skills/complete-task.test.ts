@@ -113,7 +113,7 @@ describe("complete_task Skill", () => {
 
       // Mock HTTP client
       mockHttpClient = {
-        put: vi.fn(),
+        patch: vi.fn(),
       };
 
       // Spy on extractSessionToken
@@ -137,7 +137,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T12:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };
@@ -146,12 +146,13 @@ describe("complete_task Skill", () => {
 
       expect(result).toEqual(mockResponse);
       expect(result.is_completed).toBe(true);
-      expect(mockHttpClient.put).toHaveBeenCalledWith("/api/todos/1", {
-        is_completed: true,
-      });
+      expect(mockHttpClient.patch).toHaveBeenCalledWith(
+        "/api/todos/1/complete",
+        {}
+      );
     });
 
-    it("should send is_completed: true in request body", async () => {
+    it("should send empty body to complete endpoint", async () => {
       const mockResponse: CompleteTaskOutput = {
         id: 1,
         title: "Test",
@@ -161,16 +162,16 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };
 
       await executeCompleteTask(input, context);
 
-      expect(mockHttpClient.put).toHaveBeenCalledWith(
-        expect.any(String),
-        { is_completed: true }
+      expect(mockHttpClient.patch).toHaveBeenCalledWith(
+        "/api/todos/1/complete",
+        {}
       );
     });
 
@@ -184,16 +185,16 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 42 };
       const context = { sessionToken: "test-token" };
 
       await executeCompleteTask(input, context);
 
-      expect(mockHttpClient.put).toHaveBeenCalledWith(
-        "/api/todos/42",
-        expect.any(Object)
+      expect(mockHttpClient.patch).toHaveBeenCalledWith(
+        "/api/todos/42/complete",
+        {}
       );
     });
 
@@ -207,7 +208,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T12:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };
@@ -232,7 +233,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };
@@ -252,7 +253,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "my-session-token" };
@@ -272,7 +273,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };
@@ -283,7 +284,7 @@ describe("complete_task Skill", () => {
     });
 
     it("should handle 400 error from backend", async () => {
-      mockHttpClient.put.mockRejectedValue({
+      mockHttpClient.patch.mockRejectedValue({
         status: 400,
         data: { detail: "Invalid request" },
       });
@@ -300,7 +301,7 @@ describe("complete_task Skill", () => {
     });
 
     it("should handle 401 error (invalid token)", async () => {
-      mockHttpClient.put.mockRejectedValue({
+      mockHttpClient.patch.mockRejectedValue({
         status: 401,
         data: { detail: "Unauthorized" },
       });
@@ -314,7 +315,7 @@ describe("complete_task Skill", () => {
     });
 
     it("AC-20: should handle 404 error (non-existent task)", async () => {
-      mockHttpClient.put.mockRejectedValue({
+      mockHttpClient.patch.mockRejectedValue({
         status: 404,
         data: { detail: "Task not found" },
       });
@@ -328,7 +329,7 @@ describe("complete_task Skill", () => {
     });
 
     it("should handle 500 error from backend", async () => {
-      mockHttpClient.put.mockRejectedValue({
+      mockHttpClient.patch.mockRejectedValue({
         status: 500,
         data: { detail: "Internal server error" },
       });
@@ -342,7 +343,7 @@ describe("complete_task Skill", () => {
     });
 
     it("should handle network errors", async () => {
-      mockHttpClient.put.mockRejectedValue({
+      mockHttpClient.patch.mockRejectedValue({
         status: 0,
         message: "Network error",
       });
@@ -364,7 +365,7 @@ describe("complete_task Skill", () => {
       );
 
       // PUT should not have been called
-      expect(mockHttpClient.put).not.toHaveBeenCalled();
+      expect(mockHttpClient.patch).not.toHaveBeenCalled();
     });
 
     it("should handle already completed task", async () => {
@@ -378,7 +379,7 @@ describe("complete_task Skill", () => {
         updated_at: "2025-01-01T00:00:00Z",
       };
 
-      mockHttpClient.put.mockResolvedValue({ data: mockResponse });
+      mockHttpClient.patch.mockResolvedValue({ data: mockResponse });
 
       const input: CompleteTaskInput = { task_id: 1 };
       const context = { sessionToken: "test-token" };

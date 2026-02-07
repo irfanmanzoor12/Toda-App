@@ -89,7 +89,7 @@ describe("list_tasks Skill", () => {
         },
       ];
 
-      mockHttpClient.get.mockResolvedValue({ data: mockTasks });
+      mockHttpClient.get.mockResolvedValue({ data: { tasks: mockTasks } });
 
       const context = { sessionToken: "test-token" };
       const result = await executeListTasks(context);
@@ -140,7 +140,7 @@ describe("list_tasks Skill", () => {
         },
       ];
 
-      mockHttpClient.get.mockResolvedValue({ data: mockTasks });
+      mockHttpClient.get.mockResolvedValue({ data: { tasks: mockTasks } });
 
       const context = { sessionToken: "test-token" };
       const result = await executeListTasks(context);
@@ -166,7 +166,7 @@ describe("list_tasks Skill", () => {
         },
       ];
 
-      mockHttpClient.get.mockResolvedValue({ data: mockTasks });
+      mockHttpClient.get.mockResolvedValue({ data: { tasks: mockTasks } });
 
       const context = { sessionToken: "test-token" };
       const result = await executeListTasks(context);
@@ -194,7 +194,7 @@ describe("list_tasks Skill", () => {
         },
       ];
 
-      mockHttpClient.get.mockResolvedValue({ data: mockTasks });
+      mockHttpClient.get.mockResolvedValue({ data: { tasks: mockTasks } });
 
       const context = { sessionToken: "test-token" };
       const result = await executeListTasks(context);

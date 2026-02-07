@@ -8,10 +8,10 @@ A full-stack task management application with AI-powered chatbot, built with mod
 - **Priorities**: Low, Medium, High, Critical with visual indicators
 - **Tags**: Organize tasks with custom tags
 - **Due Dates**: Set deadlines with reminder scheduling
-- **Full-Text Search**: Search tasks by title/description with filters
-- **Recurring Tasks**: Daily, weekly, monthly recurrence patterns
-- **AI Chatbot**: Natural language task management via MCP tools
-- **Real-time Updates**: Event-driven architecture with Kafka
+- **Full-Text Search**: Search tasks by title and description with filters
+- **AI Chatbot**: Natural language task management via OpenAI + MCP tools
+- **Event-Driven**: Kafka event publishing for task state changes
+- **Authentication**: Better Auth with JWT tokens
 
 ## Tech Stack
 
@@ -20,37 +20,44 @@ A full-stack task management application with AI-powered chatbot, built with mod
 | Frontend | Next.js 14, React 18, TypeScript |
 | Backend | FastAPI, Python 3.13, SQLAlchemy |
 | Database | PostgreSQL (Neon) |
-| Auth | Better Auth |
+| Auth | Better Auth + JWT |
 | AI | OpenAI GPT-4, MCP Protocol |
 | Events | Apache Kafka (Strimzi) |
-| Runtime | Dapr |
-| Orchestration | Kubernetes, Helm |
+| Orchestration | Kubernetes, Helm, Dapr |
 | CI/CD | GitHub Actions |
 
 ## Project Structure
 
 ```
 todoapp/
-├── backend/                    # FastAPI backend
+├── backend/                    # FastAPI backend (port 8000)
 │   ├── src/
-│   │   ├── api/routes/        # API endpoints
+│   │   ├── api/routes/        # API endpoints (tasks, tags, chat)
 │   │   ├── models/            # SQLAlchemy models
 │   │   ├── schemas/           # Pydantic schemas
-│   │   └── events/            # Kafka event publisher
+│   │   ├── auth/              # JWT verification
+│   │   ├── events/            # Kafka event publisher
+│   │   └── services/          # Agent service (OpenAI)
 │   ├── alembic/               # Database migrations
 │   ├── recurrence-service/    # Recurring tasks microservice
 │   └── reminder-service/      # Reminders microservice
-├── frontend/                   # Next.js frontend
+├── frontend/                   # Next.js frontend (port 3000)
 │   ├── app/                   # App router pages
 │   ├── components/            # React components
-│   └── lib/                   # API client, auth
-├── chatbot/
-│   └── mcp-server/            # MCP tools for AI chatbot
+│   └── lib/                   # API client, auth client
+├── chatbot/                    # AI chatbot system
+│   ├── mcp-server/            # MCP tools + HTTP server (port 3003)
+│   │   ├── skills/            # add/list/complete/delete/update task
+│   │   ├── middleware/        # Auth middleware
+│   │   └── utils/             # HTTP client wrapper
+│   ├── agent/                 # Agent config and runtime
+│   └── tests/                 # Vitest test suite (252 tests)
 ├── k8s/                       # Kubernetes manifests
 │   ├── charts/todoapp/        # Helm chart
 │   ├── kafka/                 # Strimzi Kafka
-│   ├── dapr/                  # Dapr components
-│   └── deployments/           # Service deployments
+│   └── dapr/                  # Dapr components
+├── specs/                     # Specifications
+├── tests/load/                # k6 load tests
 └── .github/workflows/         # CI/CD pipelines
 ```
 
@@ -58,41 +65,31 @@ todoapp/
 
 ### Prerequisites
 
-- Python 3.13+
-- Node.js 20+
+- Python 3.13+ (with uv package manager)
+- Node.js 18+
 - PostgreSQL (or Neon account)
 - OpenAI API key
 
-### 1. Clone and Setup
-
-```bash
-git clone https://github.com/irfanmanzoor12/Toda-App.git
-cd Toda-App
-```
-
-### 2. Backend Setup
+### 1. Backend
 
 ```bash
 cd backend
 
-# Create .env file
-cat > .env << EOF
-DATABASE_URL=postgresql://user:pass@host:5432/todoapp
-OPENAI_API_KEY=sk-...
-BETTER_AUTH_SECRET=your-secret-key
-EOF
+# Create .env from example
+cp .env.example .env
+# Edit .env with your DATABASE_URL, OPENAI_API_KEY, BETTER_AUTH_SECRET
 
-# Install dependencies (using uv)
+# Install dependencies
 uv sync
 
 # Run migrations
 uv run alembic upgrade head
 
-# Start server
-uv run uvicorn src.api.main:app --reload --port 8001
+# Start server (runs on port 8000)
+uv run uvicorn src.api.main:app --reload
 ```
 
-### 3. Frontend Setup
+### 2. Frontend
 
 ```bash
 cd frontend
@@ -100,31 +97,46 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env.local
-cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://localhost:8001
-BETTER_AUTH_SECRET=your-secret-key
-EOF
+# Create .env.local from example
+cp .env.local.example .env.local
+# Edit with BETTER_AUTH_SECRET and BETTER_AUTH_URL
 
-# Start dev server
+# Start dev server (runs on port 3000)
 npm run dev
 ```
 
-### 4. Access Application
+### 3. Chatbot (MCP Server)
+
+```bash
+cd chatbot
+
+# Install dependencies
+npm install
+
+# Create .env from example
+cp .env.example .env
+# Edit with OPENAI_API_KEY and PHASE_2_API_BASE_URL=http://127.0.0.1:8000
+
+# Start MCP HTTP server (runs on port 3003)
+npm run dev:mcp-http
+```
+
+### 4. Access
 
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8001/docs
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- MCP Server: http://localhost:3003/health
 
 ## API Endpoints
 
 ### Tasks
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/todos` | List all tasks |
 | POST | `/api/todos` | Create task |
-| GET | `/api/todos/{id}` | Get task |
+| GET | `/api/todos` | List tasks (paginated, filterable) |
 | PUT | `/api/todos/{id}` | Update task |
-| DELETE | `/api/todos/{id}` | Delete task (soft) |
+| DELETE | `/api/todos/{id}` | Soft delete task |
 | PATCH | `/api/todos/{id}/complete` | Mark complete |
 | PUT | `/api/todos/{id}/priority` | Set priority |
 | PUT | `/api/todos/{id}/due-date` | Set due date |
@@ -133,103 +145,60 @@ npm run dev
 ### Tags
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/tags` | List user's tags |
+| GET | `/api/tags` | List user tags |
 | POST | `/api/todos/{id}/tags` | Add tag to task |
 | DELETE | `/api/todos/{id}/tags/{name}` | Remove tag |
 
-### Recurrence (port 8002)
+### Chat
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/recurrence/patterns` | Create pattern |
-| GET | `/api/recurrence/patterns/{id}` | Get pattern |
-| PUT | `/api/recurrence/patterns/{id}` | Update pattern |
-| DELETE | `/api/recurrence/patterns/{id}` | Delete pattern |
-
-### Reminders (port 8003)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/reminders/schedule` | Schedule reminders |
-| GET | `/api/reminders/{task_id}` | Get task reminders |
-| DELETE | `/api/reminders/{task_id}` | Cancel reminders |
+| POST | `/api/{user_id}/chat` | Send message to AI assistant |
 
 ## MCP Tools (AI Chatbot)
 
-The chatbot supports natural language commands:
+The chatbot uses OpenAI with MCP tool integration for natural language task management:
 
-- `add_task` - Create a new task
-- `list_tasks` - View all tasks
-- `complete_task` - Mark task as done
-- `search_tasks` - Find tasks by keyword
-- `set_priority` - Change task priority
-- `add_tags` - Tag a task
-- `set_due_date` - Set deadline with reminders
-- `add_recurring_task` - Create recurring task
+| Tool | Description |
+|------|-------------|
+| `add_task` | Create a new task |
+| `list_tasks` | View all tasks |
+| `complete_task` | Mark task as done |
+| `delete_task` | Remove a task |
+| `update_task` | Edit task title/description |
 
-Example: *"Create a high priority task to review PR and remind me 1 hour before"*
+Example prompts:
+- "Add a task to review quarterly report"
+- "Show me all my tasks"
+- "Mark task 3 as complete"
+- "Delete task 5"
 
-## Kubernetes Deployment
-
-### Local (Minikube)
-
-```bash
-cd k8s
-./deploy-local.sh
-```
-
-### Helm
+## Running Tests
 
 ```bash
-helm install todoapp ./k8s/charts/todoapp \
-  --set secrets.databaseUrl="postgresql://..." \
-  --set secrets.openaiApiKey="sk-..."
-```
+# Backend (14 tests)
+cd backend
+uv run pytest tests/ -v
 
-See [k8s/README.md](k8s/README.md) for detailed instructions.
-
-## Development
-
-### Run Tests
-
-```bash
-# Backend
-cd backend && uv run pytest
-
-# Frontend
-cd frontend && npm test
-
-# E2E
-cd frontend && npm run test:e2e
+# Chatbot (252 tests)
+cd chatbot
+npm test
 
 # Load tests
 k6 run tests/load/load-test.js
-```
-
-### Database Migrations
-
-```bash
-cd backend
-
-# Create migration
-uv run alembic revision -m "description"
-
-# Apply migrations
-uv run alembic upgrade head
-
-# Rollback
-uv run alembic downgrade -1
 ```
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│ Task Service│────▶│  PostgreSQL │
-│  (Next.js)  │     │  (FastAPI)  │     │   (Neon)    │
-└─────────────┘     └──────┬──────┘     └─────────────┘
+│   Frontend  │────▶│   Backend   │────▶│  PostgreSQL  │
+│  (Next.js)  │     │  (FastAPI)  │     │   (Neon)     │
+│  port 3000  │     │  port 8000  │     └──────────────┘
+└─────────────┘     └──────┬──────┘
                            │
                     ┌──────▼──────┐
-                    │    Dapr     │
-                    │  Sidecar    │
+                    │  MCP Server │
+                    │  port 3003  │
                     └──────┬──────┘
                            │
          ┌─────────────────┼─────────────────┐
@@ -241,14 +210,8 @@ uv run alembic downgrade -1
 └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
+The frontend proxies API calls through Next.js rewrites (`/backend/*` -> `http://127.0.0.1:8000/*`). The backend delegates AI chat to OpenAI, which calls MCP tools via HTTP on port 3003. All task mutations publish events to Kafka.
+
 ## License
 
 MIT
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing`)
-5. Open a Pull Request
