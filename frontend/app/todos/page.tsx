@@ -8,12 +8,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
 import { Todo, Priority, listTodos, createTodo as createTodoApi, deleteTodo as deleteTodoApi, updateTodo as updateTodoApi, completeTodo as completeTodoApi } from "@/lib/todos-api";
 import TaskSearch from "@/components/TaskSearch";
 import TaskPriority from "@/components/TaskPriority";
 import TaskTags from "@/components/TaskTags";
 import DueDatePicker from "@/components/DueDatePicker";
+import Chat from "@/components/Chat";
 
 export default function TodosPage() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function TodosPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -54,7 +56,7 @@ export default function TodosPage() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
-    const interval = setInterval(fetchTodos, 15000);
+    const interval = setInterval(fetchTodos, 3000);
     return () => clearInterval(interval);
   }, [session, fetchTodos]);
 
@@ -120,57 +122,63 @@ export default function TodosPage() {
     setSearchResults(null);
   };
 
-  // Ensure displayTodos is always an array
+  const handleLogout = async () => {
+    await signOut();
+    router.push("/login");
+  };
+
   const displayTodos = Array.isArray(searchResults) ? searchResults : (Array.isArray(todos) ? todos : []);
+  const completedCount = todos.filter(t => t.completed).length;
+  const pendingCount = todos.length - completedCount;
 
   if (isPending || !session) {
-    return <div style={{ padding: "40px", textAlign: "center" }}>Loading...</div>;
+    return (
+      <div className="loading-page">
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{
-      padding: "20px",
-      maxWidth: "900px",
-      margin: "0 auto",
-      fontFamily: "system-ui, -apple-system, sans-serif"
-    }}>
-      <h1 style={{ marginBottom: "24px", fontSize: "28px" }}>My Todos</h1>
+    <div className="todo-app">
+      {/* Header */}
+      <div className="todo-header">
+        <div className="todo-header-left">
+          <h1>My Tasks</h1>
+          <p>Welcome back, {session.user?.name || session.user?.email}</p>
+        </div>
+        <div className="todo-header-right">
+          <div className="header-stats">
+            <span className="stat-badge">{pendingCount} active</span>
+            <span className="stat-badge">{completedCount} done</span>
+          </div>
+          <button onClick={handleLogout} className="btn-logout">Sign Out</button>
+        </div>
+      </div>
 
-      {/* Search Component */}
-      <TaskSearch onResults={handleSearchResults} onClear={handleClearSearch} />
+      {/* Search */}
+      <div style={{ marginTop: '12px', marginBottom: '4px' }}>
+        <TaskSearch onResults={handleSearchResults} onClear={handleClearSearch} />
+      </div>
 
       {/* Create Form */}
-      <form onSubmit={handleCreateTodo} style={{
-        marginBottom: "32px",
-        padding: "20px",
-        backgroundColor: "#f9fafb",
-        borderRadius: "8px",
-        border: "1px solid #e5e7eb"
-      }}>
-        <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+      <form onSubmit={handleCreateTodo} className="create-form">
+        <div className="create-form-row">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Task title"
+            placeholder="What needs to be done?"
             required
-            style={{
-              flex: 1,
-              padding: "10px 12px",
-              fontSize: "16px",
-              border: "1px solid #d1d5db",
-              borderRadius: "6px",
-            }}
+            className="form-input"
           />
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value as Priority)}
-            style={{
-              padding: "10px 12px",
-              fontSize: "14px",
-              border: "1px solid #d1d5db",
-              borderRadius: "6px",
-            }}
+            className="create-form-select"
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
@@ -181,73 +189,45 @@ export default function TodosPage() {
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Description (optional)"
+          placeholder="Add a description (optional)"
           rows={2}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            marginBottom: "12px",
-            fontSize: "14px",
-            border: "1px solid #d1d5db",
-            borderRadius: "6px",
-            resize: "vertical",
-            fontFamily: "inherit",
-            boxSizing: "border-box"
-          }}
+          className="create-form-textarea"
         />
-        <button type="submit" style={{
-          padding: "10px 20px",
-          fontSize: "16px",
-          backgroundColor: "#3b82f6",
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          cursor: "pointer"
-        }}>
-          Add Todo
+        <button type="submit" className="btn-add">
+          Add Task
         </button>
       </form>
 
       {/* Search Results Indicator */}
       {searchResults !== null && (
-        <div style={{
-          padding: "10px 16px",
-          marginBottom: "16px",
-          backgroundColor: "#e0f2fe",
-          borderRadius: "6px",
-          fontSize: "14px",
-          color: "#0369a1"
-        }}>
+        <div className="search-indicator">
           Showing {searchResults.length} search result{searchResults.length !== 1 ? "s" : ""}
         </div>
       )}
 
       {/* Todo List */}
-      {loading ? (
-        <div>Loading todos...</div>
+      {loading && todos.length === 0 ? (
+        <div className="loading-page" style={{ minHeight: '200px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="spinner" style={{ margin: '0 auto 16px' }} />
+            <span>Loading tasks...</span>
+          </div>
+        </div>
       ) : (
         <div>
           {displayTodos.length === 0 ? (
-            <p style={{ color: "#6b7280", textAlign: "center", padding: "40px" }}>
-              {searchResults !== null ? "No matching tasks found." : "No todos yet. Create one above!"}
-            </p>
+            <div className="todo-empty">
+              <div className="todo-empty-icon">
+                {searchResults !== null ? '\u{1F50D}' : '\u{1F4CB}'}
+              </div>
+              <p>{searchResults !== null ? "No matching tasks found." : "No tasks yet. Create your first one above!"}</p>
+            </div>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            <ul className="todo-list">
               {displayTodos.map((todo) => (
                 <li
                   key={todo.id}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    padding: "16px",
-                    marginBottom: "12px",
-                    backgroundColor: todo.completed ? "#f9fafb" : "white",
-                    borderRadius: "8px",
-                    borderLeft: `4px solid ${
-                      todo.priority === "critical" ? "#7b1fa2" :
-                      todo.priority === "high" ? "#c62828" :
-                      todo.priority === "medium" ? "#ef6c00" : "#43a047"
-                    }`,
-                  }}
+                  className={`todo-card priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}
                 >
                   {editingId === todo.id ? (
                     <div>
@@ -255,126 +235,65 @@ export default function TodosPage() {
                         type="text"
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px 12px",
-                          marginBottom: "10px",
-                          fontSize: "16px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                          boxSizing: "border-box"
-                        }}
+                        className="todo-edit-input"
                       />
                       <textarea
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         rows={2}
-                        style={{
-                          width: "100%",
-                          padding: "8px 12px",
-                          marginBottom: "12px",
-                          fontSize: "14px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                          resize: "vertical",
-                          fontFamily: "inherit",
-                          boxSizing: "border-box"
-                        }}
+                        className="todo-edit-textarea"
                       />
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button onClick={() => handleUpdateTodo(todo.id)} style={{
-                          padding: "6px 12px",
-                          fontSize: "14px",
-                          backgroundColor: "#10b981",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer"
-                        }}>
+                      <div className="todo-edit-actions">
+                        <button onClick={() => handleUpdateTodo(todo.id)} className="btn-save">
                           Save
                         </button>
-                        <button onClick={cancelEdit} style={{
-                          padding: "6px 12px",
-                          fontSize: "14px",
-                          backgroundColor: "#6b7280",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer"
-                        }}>
+                        <button onClick={cancelEdit} className="btn-cancel">
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ flex: 1 }}>
-                          <h3 style={{
-                            margin: "0 0 4px 0",
-                            fontSize: "16px",
-                            color: todo.completed ? "#6b7280" : "#111827",
-                            textDecoration: todo.completed ? "line-through" : "none"
-                          }}>
-                            {todo.completed && "✓ "}{todo.title}
+                      <div className="todo-card-main">
+                        <div className="todo-card-content">
+                          <h3 className="todo-card-title">
+                            {todo.completed && '\u2713 '}{todo.title}
                           </h3>
                           {todo.description && (
-                            <p style={{ margin: "0 0 8px 0", color: "#6b7280", fontSize: "14px" }}>
-                              {todo.description}
-                            </p>
+                            <p className="todo-card-desc">{todo.description}</p>
                           )}
                         </div>
-                        <div style={{ display: "flex", gap: "6px" }}>
+                        <div className="todo-card-actions">
                           {!todo.completed && (
                             <>
-                              <button onClick={() => startEdit(todo)} style={{
-                                padding: "4px 10px",
-                                fontSize: "12px",
-                                backgroundColor: "#f3f4f6",
-                                color: "#374151",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "4px",
-                                cursor: "pointer"
-                              }}>
-                                Edit
+                              <button
+                                onClick={() => startEdit(todo)}
+                                className="btn-icon btn-icon-edit"
+                                title="Edit"
+                              >
+                                &#9998;
                               </button>
-                              <button onClick={() => handleCompleteTodo(todo.id)} style={{
-                                padding: "4px 10px",
-                                fontSize: "12px",
-                                backgroundColor: "#10b981",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer"
-                              }}>
-                                ✓
+                              <button
+                                onClick={() => handleCompleteTodo(todo.id)}
+                                className="btn-icon btn-icon-complete"
+                                title="Complete"
+                              >
+                                &#10003;
                               </button>
                             </>
                           )}
-                          <button onClick={() => handleDeleteTodo(todo.id)} style={{
-                            padding: "4px 10px",
-                            fontSize: "12px",
-                            backgroundColor: "#ef4444",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer"
-                          }}>
-                            ×
+                          <button
+                            onClick={() => handleDeleteTodo(todo.id)}
+                            className="btn-icon btn-icon-delete"
+                            title="Delete"
+                          >
+                            &#10005;
                           </button>
                         </div>
                       </div>
 
                       {/* Phase V metadata */}
-                      <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        flexWrap: "wrap",
-                        marginTop: "12px",
-                        paddingTop: "12px",
-                        borderTop: "1px solid #f0f0f0"
-                      }}>
+                      <div className="todo-meta">
                         <TaskPriority
                           taskId={todo.id}
                           priority={todo.priority || "medium"}
@@ -397,6 +316,22 @@ export default function TodosPage() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Chat FAB */}
+      <button
+        onClick={() => setChatOpen(!chatOpen)}
+        className={`chat-fab ${chatOpen ? 'chat-fab-close' : 'chat-fab-open'}`}
+        title={chatOpen ? 'Close chat' : 'AI Todo Assistant'}
+      >
+        {chatOpen ? '\u00D7' : '\u{1F4AC}'}
+      </button>
+
+      {/* Inline Chat Panel */}
+      {chatOpen && (
+        <div className="chat-panel">
+          <Chat />
         </div>
       )}
     </div>

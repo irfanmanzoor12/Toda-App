@@ -51,6 +51,7 @@ yarn.lock
 .coverage
 htmlcov/
 *.cover
+load-test-results.json
 
 # Alembic
 alembic/versions/__pycache__/

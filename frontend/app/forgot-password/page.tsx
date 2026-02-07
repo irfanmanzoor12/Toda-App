@@ -15,7 +15,6 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      // Call Better Auth forgot password endpoint
       const response = await fetch('/api/auth/forget-password', {
         method: 'POST',
         headers: {
@@ -42,99 +41,66 @@ export default function ForgotPasswordPage() {
 
   if (submitted) {
     return (
-      <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-        <h1>Check Your Email</h1>
-        <div
-          style={{
-            padding: '15px',
-            marginBottom: '20px',
-            backgroundColor: '#efe',
-            border: '1px solid #3c3',
-            borderRadius: '4px',
-          }}
-        >
-          <p>
-            We've sent a password reset link to <strong>{email}</strong>
-          </p>
-          <p style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-            Please check your email and click the link to reset your password.
-            The link will expire in 1 hour.
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="auth-logo">
+            <div className="auth-logo-icon">T</div>
+            <h1 className="auth-title">Check your email</h1>
+            <p className="auth-subtitle">We&apos;ve sent a reset link</p>
+          </div>
+
+          <div className="auth-alert auth-alert-success">
+            <p>We&apos;ve sent a password reset link to <strong>{email}</strong></p>
+            <p style={{ marginTop: '8px', fontSize: '13px', opacity: 0.8 }}>
+              Please check your email and click the link to reset your password.
+              The link will expire in 1 hour.
+            </p>
+          </div>
+
+          <p className="auth-footer">
+            <Link href="/login">Back to Sign In</Link>
           </p>
         </div>
-        <Link href="/login" style={{ color: '#0070f3', textDecoration: 'underline' }}>
-          Back to Login
-        </Link>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-      <h1>Reset Password</h1>
-      <p style={{ marginBottom: '20px', color: '#666' }}>
-        Enter your email address and we'll send you a link to reset your password.
-      </p>
-
-      {error && (
-        <div
-          style={{
-            padding: '10px',
-            marginBottom: '20px',
-            backgroundColor: '#fee',
-            border: '1px solid #c33',
-            borderRadius: '4px',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '5px' }}>
-            Email Address:
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="you@example.com"
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-            }}
-          />
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <div className="auth-logo-icon">T</div>
+          <h1 className="auth-title">Reset password</h1>
+          <p className="auth-subtitle">Enter your email and we&apos;ll send you a reset link</p>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: loading ? '#ccc' : '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-          }}
-        >
-          {loading ? 'Sending...' : 'Send Reset Link'}
-        </button>
-      </form>
+        {error && (
+          <div className="auth-alert auth-alert-error">{error}</div>
+        )}
 
-      <p style={{ marginTop: '20px', textAlign: 'center' }}>
-        Remember your password?{' '}
-        <Link href="/login" style={{ color: '#0070f3' }}>
-          Back to Login
-        </Link>
-      </p>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email" className="form-label">Email Address</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="form-input"
+            />
+          </div>
+
+          <button type="submit" disabled={loading} className="btn btn-primary">
+            {loading ? 'Sending...' : 'Send Reset Link'}
+          </button>
+        </form>
+
+        <p className="auth-footer" style={{ marginTop: '24px' }}>
+          Remember your password? <Link href="/login">Sign in</Link>
+        </p>
+      </div>
     </div>
   );
 }

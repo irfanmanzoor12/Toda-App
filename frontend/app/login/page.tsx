@@ -14,7 +14,6 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Show success message if coming from registration or password reset
   useEffect(() => {
     if (searchParams.get('registered') === 'true') {
       setSuccessMessage('Registration successful! Please login.');
@@ -30,7 +29,6 @@ function LoginContent() {
     setError('');
     setSuccessMessage('');
 
-    // Client-side validation
     if (!email || !email.includes('@')) {
       setError('Please enter a valid email address');
       return;
@@ -44,7 +42,6 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      // Sign in with Better Auth
       const result = await signIn.email({
         email: email.trim().toLowerCase(),
         password,
@@ -56,7 +53,6 @@ function LoginContent() {
         return;
       }
 
-      // Successfully logged in - redirect to todos page
       setLoading(false);
       router.push('/todos');
     } catch (err: any) {
@@ -66,111 +62,69 @@ function LoginContent() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-      <h1>Login</h1>
-
-      {successMessage && (
-        <div style={{
-          padding: '10px',
-          marginBottom: '20px',
-          backgroundColor: '#efe',
-          border: '1px solid #3c3',
-          borderRadius: '4px'
-        }}>
-          {successMessage}
-        </div>
-      )}
-
-      {error && (
-        <div style={{
-          padding: '10px',
-          marginBottom: '20px',
-          backgroundColor: '#fee',
-          border: '1px solid #c33',
-          borderRadius: '4px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '5px' }}>
-            Email:
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <div className="auth-logo-icon">T</div>
+          <h1 className="auth-title">Welcome back</h1>
+          <p className="auth-subtitle">Sign in to manage your tasks</p>
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '5px' }}>
-            Password:
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
-        </div>
+        {successMessage && (
+          <div className="auth-alert auth-alert-success">{successMessage}</div>
+        )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: loading ? '#ccc' : '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px'
-          }}
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
+        {error && (
+          <div className="auth-alert auth-alert-error">{error}</div>
+        )}
 
-      <p style={{ marginTop: '15px', textAlign: 'center' }}>
-        <Link href="/forgot-password" style={{ color: '#0070f3' }}>
-          Forgot your password?
-        </Link>
-      </p>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email" className="form-label">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="form-input"
+            />
+          </div>
 
-      <p style={{ marginTop: '15px', textAlign: 'center' }}>
-        Don't have an account?{' '}
-        <Link href="/register" style={{ color: '#0070f3' }}>
-          Register here
-        </Link>
-      </p>
+          <div className="form-group">
+            <label htmlFor="password" className="form-label">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
+              className="form-input"
+            />
+          </div>
+
+          <button type="submit" disabled={loading} className="btn btn-primary">
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <p className="auth-footer" style={{ marginTop: '16px' }}>
+          <Link href="/forgot-password">Forgot your password?</Link>
+        </p>
+
+        <p className="auth-footer" style={{ marginTop: '12px' }}>
+          Don&apos;t have an account? <Link href="/register">Create one</Link>
+        </p>
+      </div>
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+    <Suspense fallback={<div className="loading-page"><div className="spinner" /></div>}>
       <LoginContent />
     </Suspense>
   );

@@ -12,9 +12,9 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      // Chat endpoint goes to Agent API
+      // Chat endpoint goes to Agent API (port 3001)
       '/api/chat': {
-        target: 'http://localhost:3002',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       }
     }

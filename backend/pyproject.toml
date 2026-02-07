@@ -1,0 +1,32 @@
+[project]
+name = "todoapp-backend"
+version = "1.0.0"
+description = "TodoApp Backend - FastAPI with PostgreSQL"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (may require external services)",
+    "slow: marks tests as slow running",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "alembic/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]

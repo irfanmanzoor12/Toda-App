@@ -1,215 +1,261 @@
 """
 TASK-067: Integration tests for Task Service with Kafka
 Tests event publishing via Dapr Pub/Sub
+
+Refs: REQ-006, COMP-001
 """
 
 import pytest
-import asyncio
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Test fixtures
-@pytest.fixture
-def mock_dapr_client():
-    """Mock Dapr HTTP client for pub/sub."""
-    with patch('httpx.AsyncClient') as mock:
-        client = AsyncMock()
-        client.post = AsyncMock(return_value=MagicMock(status_code=204))
-        mock.return_value.__aenter__.return_value = client
-        yield client
+from src.events.publisher import EventPublisher, EventType
 
 
 @pytest.fixture
-def sample_task():
+def publisher(mock_httpx_client):
+    """EventPublisher with mocked HTTP client."""
+    pub = EventPublisher(dapr_port=3500, pubsub_name="kafka-pubsub")
+    pub.client = mock_httpx_client
+    mock_httpx_client.post.return_value = MagicMock(status_code=204)
+    return pub
+
+
+@pytest.fixture
+def sample_task_data():
     """Sample task data for testing."""
     return {
-        "id": 1,
+        "task_id": 1,
+        "user_id": "user-123",
         "title": "Test Task",
         "description": "Test description",
         "priority": "high",
-        "status": "pending",
-        "completed": False,
-        "user_id": "user-123",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "tags": ["work", "urgent"],
+        "due_date": datetime(2026, 2, 15, 10, 0, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2026, 2, 1, 10, 0, 0, tzinfo=timezone.utc),
     }
 
 
 class TestEventPublishing:
     """Test suite for Kafka event publishing via Dapr."""
 
-    @pytest.mark.asyncio
-    async def test_publish_task_created_event(self, mock_dapr_client, sample_task):
-        """Test: create task → verify event published."""
-        from src.events.publisher import EventPublisher
-
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events"
+    async def test_publish_task_created_event(self, publisher, sample_task_data, mock_httpx_client):
+        """Test: create task -> verify event published to Kafka."""
+        await publisher.publish_task_created(
+            task_id=sample_task_data["task_id"],
+            user_id=sample_task_data["user_id"],
+            title=sample_task_data["title"],
+            description=sample_task_data["description"],
+            priority=sample_task_data["priority"],
+            tags=sample_task_data["tags"],
+            due_date=sample_task_data["due_date"],
+            created_at=sample_task_data["created_at"],
         )
 
-        # Publish event
-        await publisher.publish_task_created(sample_task)
+        mock_httpx_client.post.assert_called_once()
+        call_args = mock_httpx_client.post.call_args
 
-        # Verify Dapr was called
-        mock_dapr_client.post.assert_called_once()
-        call_args = mock_dapr_client.post.call_args
-
-        # Verify URL
-        assert "v1.0/publish/kafka-pubsub/task-events" in call_args[0][0]
+        # Verify URL targets correct pubsub and topic
+        assert "kafka-pubsub/task-events" in call_args[1].get("url", call_args[0][0])
 
         # Verify payload
-        payload = json.loads(call_args[1]["content"])
+        payload = call_args[1]["json"]
         assert payload["event_type"] == "task.created"
-        assert payload["data"]["id"] == sample_task["id"]
-        assert payload["data"]["title"] == sample_task["title"]
+        assert payload["data"]["task_id"] == 1
+        assert payload["data"]["title"] == "Test Task"
+        assert payload["data"]["priority"] == "high"
+        assert payload["data"]["tags"] == ["work", "urgent"]
 
-    @pytest.mark.asyncio
-    async def test_publish_task_updated_event_with_diff(self, mock_dapr_client, sample_task):
-        """Test: update task → verify event with diff."""
-        from src.events.publisher import EventPublisher
-
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events"
-        )
-
-        old_values = {"title": "Old Title", "priority": "low"}
-        new_values = {"title": "New Title", "priority": "high"}
+    async def test_publish_task_updated_event_with_diff(self, publisher, mock_httpx_client):
+        """Test: update task -> verify event with change diff."""
+        changes = {
+            "title": {"old": "Old Title", "new": "New Title"},
+            "priority": {"old": "low", "new": "high"},
+        }
 
         await publisher.publish_task_updated(
-            task=sample_task,
-            old_values=old_values,
-            new_values=new_values
+            task_id=1,
+            user_id="user-123",
+            changes=changes,
         )
 
-        mock_dapr_client.post.assert_called_once()
-        call_args = mock_dapr_client.post.call_args
-        payload = json.loads(call_args[1]["content"])
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
 
         assert payload["event_type"] == "task.updated"
-        assert "changes" in payload["data"]
         assert payload["data"]["changes"]["title"]["old"] == "Old Title"
         assert payload["data"]["changes"]["title"]["new"] == "New Title"
+        assert payload["data"]["changes"]["priority"]["old"] == "low"
+        assert payload["data"]["changes"]["priority"]["new"] == "high"
 
-    @pytest.mark.asyncio
-    async def test_publish_task_completed_event(self, mock_dapr_client, sample_task):
-        """Test: complete task → verify event published."""
-        from src.events.publisher import EventPublisher
+    async def test_publish_task_completed_event(self, publisher, mock_httpx_client):
+        """Test: complete task -> verify event published."""
+        completed_at = datetime(2026, 2, 7, 12, 0, 0, tzinfo=timezone.utc)
 
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events"
+        await publisher.publish_task_completed(
+            task_id=1,
+            user_id="user-123",
+            completed_at=completed_at,
         )
 
-        sample_task["completed"] = True
-        sample_task["status"] = "complete"
-
-        await publisher.publish_task_completed(sample_task)
-
-        mock_dapr_client.post.assert_called_once()
-        call_args = mock_dapr_client.post.call_args
-        payload = json.loads(call_args[1]["content"])
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
 
         assert payload["event_type"] == "task.completed"
-        assert payload["data"]["completed"] is True
+        assert payload["data"]["task_id"] == 1
+        assert payload["data"]["completed_at"] == completed_at.isoformat()
 
-    @pytest.mark.asyncio
-    async def test_publish_task_deleted_event(self, mock_dapr_client, sample_task):
-        """Test: delete task → verify event published."""
-        from src.events.publisher import EventPublisher
+    async def test_publish_task_deleted_event(self, publisher, mock_httpx_client):
+        """Test: delete task -> verify event published."""
+        deleted_at = datetime(2026, 2, 7, 12, 0, 0, tzinfo=timezone.utc)
 
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events"
+        await publisher.publish_task_deleted(
+            task_id=1,
+            user_id="user-123",
+            deleted_at=deleted_at,
         )
 
-        await publisher.publish_task_deleted(task_id=1, user_id="user-123")
-
-        mock_dapr_client.post.assert_called_once()
-        call_args = mock_dapr_client.post.call_args
-        payload = json.loads(call_args[1]["content"])
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
 
         assert payload["event_type"] == "task.deleted"
         assert payload["data"]["task_id"] == 1
 
-    @pytest.mark.asyncio
-    async def test_publish_priority_changed_event(self, mock_dapr_client, sample_task):
-        """Test: change priority → verify event published."""
-        from src.events.publisher import EventPublisher
-
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events"
-        )
-
-        await publisher.publish_priority_changed(
-            task=sample_task,
+    async def test_publish_priority_changed_event(self, publisher, mock_httpx_client):
+        """Test: change priority -> verify event published."""
+        await publisher.publish_task_priority_changed(
+            task_id=1,
+            user_id="user-123",
             old_priority="low",
-            new_priority="critical"
+            new_priority="critical",
         )
 
-        mock_dapr_client.post.assert_called_once()
-        call_args = mock_dapr_client.post.call_args
-        payload = json.loads(call_args[1]["content"])
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
 
         assert payload["event_type"] == "task.priority_changed"
         assert payload["data"]["old_priority"] == "low"
         assert payload["data"]["new_priority"] == "critical"
 
-    @pytest.mark.asyncio
-    async def test_retry_on_failure(self, mock_dapr_client, sample_task):
-        """Test: retry logic on publish failure."""
-        from src.events.publisher import EventPublisher
+    async def test_publish_due_date_set_event(self, publisher, mock_httpx_client):
+        """Test: set due date -> verify event published."""
+        due_date = datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc)
 
-        # First two calls fail, third succeeds
-        mock_dapr_client.post.side_effect = [
-            Exception("Connection refused"),
-            Exception("Timeout"),
-            MagicMock(status_code=204)
-        ]
-
-        publisher = EventPublisher(
-            dapr_host="localhost",
-            dapr_port=3500,
-            pubsub_name="kafka-pubsub",
-            topic_name="task-events",
-            max_retries=3
+        await publisher.publish_task_due_date_set(
+            task_id=1,
+            user_id="user-123",
+            due_date=due_date,
+            reminder_schedule=["1h", "1d"],
         )
 
-        # Should succeed after retries
-        await publisher.publish_task_created(sample_task)
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
 
-        assert mock_dapr_client.post.call_count == 3
+        assert payload["event_type"] == "task.due_date_set"
+        assert payload["data"]["due_date"] == due_date.isoformat()
+        assert payload["data"]["reminder_schedule"] == ["1h", "1d"]
+
+    async def test_publish_task_tagged_event(self, publisher, mock_httpx_client):
+        """Test: add tags -> verify event published."""
+        await publisher.publish_task_tagged(
+            task_id=1,
+            user_id="user-123",
+            tags_added=["work", "urgent"],
+        )
+
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
+
+        assert payload["event_type"] == "task.tagged"
+        assert payload["data"]["tags_added"] == ["work", "urgent"]
+
+    async def test_publish_task_untagged_event(self, publisher, mock_httpx_client):
+        """Test: remove tag -> verify event published."""
+        await publisher.publish_task_untagged(
+            task_id=1,
+            user_id="user-123",
+            tag_removed="urgent",
+        )
+
+        mock_httpx_client.post.assert_called_once()
+        payload = mock_httpx_client.post.call_args[1]["json"]
+
+        assert payload["event_type"] == "task.untagged"
+        assert payload["data"]["tag_removed"] == "urgent"
+
+    async def test_publish_event_includes_timestamp(self, publisher, mock_httpx_client):
+        """Test: all events include a timestamp field."""
+        await publisher.publish_task_deleted(
+            task_id=1,
+            user_id="user-123",
+            deleted_at=datetime.now(timezone.utc),
+        )
+
+        payload = mock_httpx_client.post.call_args[1]["json"]
+        assert "timestamp" in payload
+
+    async def test_publish_event_http_error_raises(self, publisher, mock_httpx_client):
+        """Test: HTTP error from Dapr raises exception."""
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Server Error", request=MagicMock(), response=mock_response
+        )
+        mock_httpx_client.post.return_value = mock_response
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await publisher.publish_task_created(
+                task_id=1,
+                user_id="user-123",
+                title="Test",
+                description=None,
+                priority="medium",
+                tags=[],
+                due_date=None,
+                created_at=datetime.now(timezone.utc),
+            )
+
+    async def test_publish_event_request_error_raises(self, publisher, mock_httpx_client):
+        """Test: connection error raises exception."""
+        import httpx
+
+        mock_httpx_client.post.side_effect = httpx.RequestError("Connection refused")
+
+        with pytest.raises(httpx.RequestError):
+            await publisher.publish_task_created(
+                task_id=1,
+                user_id="user-123",
+                title="Test",
+                description=None,
+                priority="medium",
+                tags=[],
+                due_date=None,
+                created_at=datetime.now(timezone.utc),
+            )
 
 
-class TestEventPublisherWithTestcontainers:
-    """
-    Integration tests using testcontainers for real Kafka.
-    These tests require Docker and are slower.
-    Run with: pytest -m integration
-    """
+class TestEventPublisherLifecycle:
+    """Test EventPublisher initialization and cleanup."""
 
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_real_kafka_publish(self):
-        """Test publishing to real Kafka using testcontainers."""
-        pytest.skip("Requires testcontainers setup - run manually")
+    async def test_close_closes_client(self):
+        """Test: close() properly closes the httpx client."""
+        publisher = EventPublisher()
+        publisher.client = AsyncMock()
+        await publisher.close()
+        publisher.client.aclose.assert_called_once()
 
-        # This would use testcontainers-python to spin up Kafka
-        # from testcontainers.kafka import KafkaContainer
-        #
-        # with KafkaContainer() as kafka:
-        #     bootstrap_server = kafka.get_bootstrap_server()
-        #     # ... test actual Kafka publishing
+    def test_default_configuration(self):
+        """Test: default config uses port 3500 and kafka-pubsub."""
+        publisher = EventPublisher()
+        assert "3500" in publisher.dapr_url
+        assert publisher.pubsub_name == "kafka-pubsub"
+
+    def test_custom_configuration(self):
+        """Test: custom config is applied."""
+        publisher = EventPublisher(dapr_port=3600, pubsub_name="custom-pubsub")
+        assert "3600" in publisher.dapr_url
+        assert publisher.pubsub_name == "custom-pubsub"

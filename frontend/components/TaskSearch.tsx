@@ -22,7 +22,6 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Debounced search
   const performSearch = useCallback(async () => {
     if (!query.trim()) {
       onResults(null);
@@ -48,7 +47,6 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
     }
   }, [query, status, priority, tags, onResults]);
 
-  // Debounce effect
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) {
@@ -68,22 +66,20 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
   };
 
   return (
-    <div style={{ marginBottom: '20px' }}>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-        <div style={{ flex: 1, position: 'relative' }}>
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+      }}>
+        <div style={{ position: 'relative', flex: 1 }}>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tasks..."
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              paddingRight: '40px',
-              fontSize: '14px',
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-            }}
+            className="form-input"
+            style={{ paddingRight: loading ? '36px' : undefined }}
           />
           {loading && (
             <span style={{
@@ -91,24 +87,29 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
               right: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#999',
-              fontSize: '12px',
-            }}>
-              ...
-            </span>
+              width: '16px',
+              height: '16px',
+              border: '2px solid #e5e7eb',
+              borderTopColor: '#4f46e5',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }} />
           )}
         </div>
 
         <button
           onClick={() => setShowFilters(!showFilters)}
           style={{
-            padding: '10px 16px',
-            fontSize: '14px',
-            backgroundColor: showFilters ? '#1976d2' : '#f5f5f5',
-            color: showFilters ? 'white' : '#333',
-            border: 'none',
-            borderRadius: '8px',
+            padding: '11px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            backgroundColor: showFilters ? '#4f46e5' : '#f3f4f6',
+            color: showFilters ? 'white' : '#374151',
+            border: showFilters ? 'none' : '1.5px solid #e5e7eb',
+            borderRadius: '10px',
             cursor: 'pointer',
+            transition: 'all 0.15s',
+            fontFamily: 'inherit',
           }}
         >
           Filters
@@ -118,13 +119,16 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
           <button
             onClick={handleClear}
             style={{
-              padding: '10px 16px',
-              fontSize: '14px',
-              backgroundColor: '#f5f5f5',
-              color: '#666',
-              border: 'none',
-              borderRadius: '8px',
+              padding: '11px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: '#f3f4f6',
+              color: '#6b7280',
+              border: '1.5px solid #e5e7eb',
+              borderRadius: '10px',
               cursor: 'pointer',
+              transition: 'all 0.15s',
+              fontFamily: 'inherit',
             }}
           >
             Clear
@@ -136,24 +140,21 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
         <div style={{
           display: 'flex',
           gap: '12px',
-          padding: '12px',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '8px',
+          padding: '14px 16px',
+          marginTop: '8px',
+          backgroundColor: 'white',
+          borderRadius: '10px',
           flexWrap: 'wrap',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
           <div>
-            <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
-              Status
-            </label>
+            <label className="form-label" style={{ fontSize: '11px' }}>Status</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as typeof status)}
-              style={{
-                padding: '6px 10px',
-                fontSize: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
+              className="create-form-select"
+              style={{ fontSize: '12px', padding: '7px 10px', minWidth: '100px' }}
             >
               <option value="all">All</option>
               <option value="pending">Pending</option>
@@ -162,18 +163,12 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
-              Priority
-            </label>
+            <label className="form-label" style={{ fontSize: '11px' }}>Priority</label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority | '')}
-              style={{
-                padding: '6px 10px',
-                fontSize: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
+              className="create-form-select"
+              style={{ fontSize: '12px', padding: '7px 10px', minWidth: '100px' }}
             >
               <option value="">Any</option>
               <option value="low">Low</option>
@@ -184,21 +179,14 @@ export default function TaskSearch({ onResults, onClear }: TaskSearchProps) {
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
-              Tags (comma-separated)
-            </label>
+            <label className="form-label" style={{ fontSize: '11px' }}>Tags</label>
             <input
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="work, urgent"
-              style={{
-                padding: '6px 10px',
-                fontSize: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                width: '150px',
-              }}
+              className="form-input"
+              style={{ fontSize: '12px', padding: '7px 10px', width: '140px' }}
             />
           </div>
         </div>

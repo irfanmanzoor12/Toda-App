@@ -17,7 +17,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
 
-    // Client-side validation
     if (!name || name.trim().length < 2) {
       setError('Please enter your name (at least 2 characters)');
       return;
@@ -36,7 +35,6 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Register with Better Auth
       const result = await signUp.email({
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -49,7 +47,6 @@ export default function RegisterPage() {
         return;
       }
 
-      // Successfully registered - redirect to todos page
       setLoading(false);
       router.push('/todos');
     } catch (err: any) {
@@ -59,110 +56,70 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-      <h1>Register</h1>
-
-      {error && (
-        <div style={{
-          padding: '10px',
-          marginBottom: '20px',
-          backgroundColor: '#fee',
-          border: '1px solid #c33',
-          borderRadius: '4px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="name" style={{ display: 'block', marginBottom: '5px' }}>
-            Name:
-          </label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            minLength={2}
-            placeholder="Your full name"
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <div className="auth-logo-icon">T</div>
+          <h1 className="auth-title">Create account</h1>
+          <p className="auth-subtitle">Start organizing your tasks today</p>
         </div>
 
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '5px' }}>
-            Email:
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
-        </div>
+        {error && (
+          <div className="auth-alert auth-alert-error">{error}</div>
+        )}
 
-        <div style={{ marginBottom: '20px' }}>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '5px' }}>
-            Password:
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
-          <small style={{ color: '#666' }}>Minimum 8 characters</small>
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="name" className="form-label">Full Name</label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              minLength={2}
+              placeholder="John Doe"
+              className="form-input"
+            />
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: loading ? '#ccc' : '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px'
-          }}
-        >
-          {loading ? 'Registering...' : 'Register'}
-        </button>
-      </form>
+          <div className="form-group">
+            <label htmlFor="email" className="form-label">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="form-input"
+            />
+          </div>
 
-      <p style={{ marginTop: '20px', textAlign: 'center' }}>
-        Already have an account?{' '}
-        <Link href="/login" style={{ color: '#0070f3' }}>
-          Login here
-        </Link>
-      </p>
+          <div className="form-group">
+            <label htmlFor="password" className="form-label">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              placeholder="Create a password"
+              className="form-input"
+            />
+            <p className="form-hint">Minimum 8 characters</p>
+          </div>
+
+          <button type="submit" disabled={loading} className="btn btn-primary">
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <p className="auth-footer" style={{ marginTop: '24px' }}>
+          Already have an account? <Link href="/login">Sign in</Link>
+        </p>
+      </div>
     </div>
   );
 }
